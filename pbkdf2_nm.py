@@ -1,7 +1,25 @@
 # pbkdf2_nm.py
 
-# This is part of the Natural Message system.
-# GPL3
+
+################################################################################
+# Copyright 2015 Natural Message, LLC.
+# Author: Robert Hoot (naturalmessage@fastmail.fm)
+#
+# This file is part of the Natural Message Shard Server.
+#
+# The Natural Message Shard Server is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Natural Message Shard Server is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Natural Message Shard Server.  If not, see <http://www.gnu.org/licenses/>.
+################################################################################
 #
 # This is a system for prompting the user to enter a 
 # password, then strengthening that password with
@@ -23,7 +41,11 @@ import base64
 import getpass
 import os
 
-def pw_hash(iterations=571373, verify_fname='natmsg_pw_receipt.save'):
+##def pw_hash(iterations=571373, verify_fname='natmsg_pw_receipt.save'):
+## Once you save a shard with a given iteration value
+## you can not change the iteration value without causing
+## decrypt errors on all the old shards.
+def pw_hash(iterations=97831, verify_fname='natmsg_pw_receipt.save'):
 	# the user is prompted to enter a password, then it is hashed
 	receipt = None
 	pw_hashed = None

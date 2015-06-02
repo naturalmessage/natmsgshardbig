@@ -1,38 +1,98 @@
 # naturalmsg_shardsvr_00_00_20.py
 
-# This is a 'big' shard server for the Natural Message network.
-# The current max shard size is 5MB, and the shards are stored
-# in encrypted files on disk (encrypted using a password that
-# the server operator enters when starting the server--
-# so there are no automatic server starts!).
-# There is also a 'small' shard server that stores the shards
-# in the database (more efficient for small shards--wastes less
-# disk space).
+################################################################################
+# Copyright 2015 Natural Message, LLC.
+# Author: Robert Hoot (naturalmessage@fastmail.fm)
 #
-# This should be run as root--there is a dropprivileges command
-# that will drop it to user natmsg (unprivileged account).
+# This file is part of the Natural Message Shard Server.
 #
+# The Natural Message Shard Server is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
 #
-## Run ths server like this (depending on what your python3
-## program is called:
+# Natural Message Shard Server is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Natural Message Shard Server.  If not, see <http://www.gnu.org/licenses/>.
+################################################################################
+# To do: Add check for old shards and issue a warning if the
+# auto delete is not working.
+
+
+# This is a 'big' shard server for the Natural Message network,
+# which means that it is the version that saves shards (in encrypted
+# format) to disk files.  The typical 'volunteer' will run this
+# with a maximum shard size of between 400 and 6000000 bytes.
+# You might as well use at least 4096 bytes if that is the
+# size of disk sectors on your system.
+#
+# The shard encryption is based on a password that the server
+# operator enters when the server starts (in addition to
+# any client-side encryption). Once you pick a password
+# for the server and save a shard, you should keep the same
+# password or else clients will not be able to retrieve shards
+# that you have already saved. 
+#
+# Directions:
+# ===========
+# 1) Install this python program in /var/natmsg using the setup script.
+#    that is intended for your exact operating system and version.  Do
+#    use a setup script for a different version of the operating system
+#    --there are too many pieces for that to work.
+#    Pgrams in /var/natmsg, in addition to this one, include:
+#     RNCryptor.py
+#     shardfunc_cp_##_##_##.py (with a version nbr referenced below)
+#     ssl_builtin_bob.py
+#     pbkdf2_nm.py
+#     nm_sign (C program from Natural Message)
+#      
+# 2) Check all the options in the conf file. The name of the file
+# is stored in the  cp_config_fname variable below, and is based on 
+# the version number so that you can test the next version (running
+# on a different port) when the current version is running.
+#
+# 3) This should be run as root--there is a dropprivileges command
+# that will drop it to user natmsg (unprivileged account), according
+# to the numeric user id in the conf file (dropto_uid and dropto_gid
+# for the group id).
+#
+## You need to know where the correct python3 program is -- your system
+## might have two different versions installed. 
+## or perhaps:
+#    cd /var/natmsg
+#    sudo /usr/local/bin/python3 naturalmsg_shardsvr_00_00_20.py
+# OR:
+#    cd /var/natmsg
+#    sudo /usr/local/bin/python3.4 naturalmsg_shardsvr_00_00_20.py
+## OR:
 #    cd /var/natmsg
 #    sudo python3 naturalmsg_shardsvr_00_00_20.py
 ## or perhaps:
 #    cd /var/natmsg
 #    sudo /usr/local/bin/python3.4 naturalmsg_shardsvr_00_00_20.py
 #
+# 4) create a cron job that will delete old shards based on the delete
+#    date in the database
 #
-# ALl run-time options are in the configuration file in the ./conf directory.
 #
+################################################################################
+################################################################################
+################################################################################
+################################################################################
 test_or_prod = 'prod' 
 NM_VERSION_STRING = "00_00_20" # also used in cp.id file
 # The configuration (conf) file for this version of the server:
 cp_config_fname = './conf/natmsg_shard_' + test_or_prod + '_' + NM_VERSION_STRING + '.conf'
 
+SHARD_ROOT = '/var/natmsg/shards'
 SHARD_PW_BYTES = '' # This is set by the user when the server starts
 SERVER_FINGERPRINT = None # This is loaded from the conf file.
-print ('remember to run a couple gpg requests with --use-agent to prime the passwords')
 shard_read_timer = False
+
 DAY_CODES = ['a', 'b', 'c', 'd', 'e', 'f', 'g'] # For shard subdirectories
 
 
@@ -50,11 +110,12 @@ ONLINE_PUB_ENC_KEY_FNAME=''
 ONLINE_PRV_ENC_KEY_FNAME=''
 OFFLINE_PUB_SIGN_KEY_FNAME=''
 
+CRONTAB_ROOT=''
+
 from cherrypy.process.plugins import DropPrivileges, PIDFile
-import shardfunc_cp_00_00_20 as shardfuncs # 
+import shardfunc_cp as shardfuncs
 import ssl_builtin_bob
 import pbkdf2_nm
-import subprocess
 
 import base64
 import binascii
@@ -66,13 +127,237 @@ import json
 import os
 import psycopg2
 import re
+import subprocess
 import sys
-import time # for the time.sleep() function
+import time
 
 
 if test_or_prod not in ('test', 'prod', 'exp'):
 	print('Error. "test_or_prod" must be one of test, prod, exp.')
 	sys.exit(12)
+
+def fail_if_not_exist(fname, note='(no description of where the file was used)'):
+	if fname is None:
+		print('Error.  Filename is missing for ' + note)
+		sys.exit(998)
+
+	if not os.path.isfile(fname):
+		print('Error. File not found: ' + str(fname) + '.  It is neede for: ' + note)
+		sys.exit(999)
+
+	return(True)
+
+
+def load_config():
+	"""
+	This will set some cherrypoy configuratoin options and return the conf
+	dictionary, which will go t oquickstart or another cherrypy start routine.
+	"""
+	global SERVER_FINGERPRINT
+	global HOSTNAME, DBNAME, DB_UNAME, DB_PW
+
+	global ONLINE_PUB_SIGN_KEY_FNAME
+	global ONLINE_PRV_SIGN_KEY_FNAME
+	global ONLINE_PUB_ENC_KEY_FNAME
+	global ONLINE_PRV_ENC_KEY_FNAME
+	global OFFLINE_PUB_SIGN_KEY_FNAME
+
+	global CONN_STR
+
+	# The config file contains ip, port, fingerprint, 
+	# and a few other things:
+	cherrypy.config.update(cp_config_fname)
+
+	cherrypy.config.update({'engine.autoreload.on':False})
+	# Connection keep-alive is depricated because connections are kept open until Connection: close is sent by the server?
+	#('Connection', 'close'), 
+	conf = {
+		'global':{'request.show_tracebacks':True,
+		'server.ssl_module': 'bob',
+		'log.access_file': '',
+		'log.screen': True,
+		'tools.response_headers.on': True,
+		'tools.response_headers.headers': [('Cache-Control', 
+				' no-cache,no-store,max-age=0'), ('Strict-Transport-Security', '')]
+		},
+		'/': {
+		'tools.sessions.on': False,
+		'tools.staticdir.root': os.path.abspath(os.getcwd())
+		},
+		'/shard_create': {
+		'tools.response_headers.on': True,
+		'tools.response_headers.headers': [('Connection', 'close'), ('Cache-Control', ' no-cache,no-store,max-age=0'),  ('Strict-Transport-Security', '')]
+		},
+		'/shard_read': {
+		'tools.response_headers.on': True,
+		'tools.response_headers.headers': [
+			('Connection', 'close'), ('Cache-Control', ' no-cache,no-store,max-age=0'),
+			('Strict-Transport-Security', '')]
+		},
+		'/shard_create': {
+		'tools.response_headers.on': True,
+		'tools.response_headers.headers': [('Connection', 'close'),
+			('Cache-Control', ' no-cache,no-store,max-age=0'),
+			('Strict-Transport-Security', '')]
+		},
+		'/webform_admin_process': {
+		'tools.response_headers.on': True,
+		'tools.response_headers.headers': [('Connection', 'close'), ('Cache-Control', ' no-cache,no-store,max-age=0'),  ('Strict-Transport-Security', '')]
+		},
+		'/webform_admin_inbox_read': {
+		'tools.response_headers.on': True,
+		'tools.response_headers.headers': [('Connection', 'close'), ('Cache-Control', ' no-cache,no-store,max-age=0'),  ('Strict-Transport-Security', '')]
+		},
+		"/favicon.ico":
+		{
+			"tools.staticfile.on": True,
+			"tools.staticfile.filename":
+						 "/var/natmsg/html/favicon.png"
+		},
+		'/static': {
+		'tools.staticdir.on': True,
+		'tools.staticdir.dir': 'static'
+		},
+		'/validateServer': {
+		'tools.response_headers.on': True,
+		'tools.response_headers.headers': [('Cache-Control', 
+			' no-cache,no-store,max-age=0'),
+			('Connection', 'keep-alive'), ('Content-Type', 'application/x-download')]
+		}
+	}
+	
+	cp_id_fname = cherrypy.config['natmsg_root'] + os.sep \
+		+ 'cp_shard_' + NM_VERSION_STRING + '.pid'
+
+
+	# server pidfile (this registers the ID number of the running
+	# instance as shown in 'ps -A' terminal command).
+	if os.path.isfile(cp_id_fname):
+		print('Error. the program ID file already exists: ' \
+			+ cp_id_fname + '.')
+		print('Maybe there is another instance using this file ' \
+			+ 'or it is there from a prior crash.')
+		print('If you are sure that no other instance of the program ' \
+			+ 'is running, you can delete that file and try again.')
+		sys.exit(9012)
+
+	PIDFile(cherrypy.engine, cp_id_fname).subscribe()
+
+	if cherrypy.config['SERVER_FINGERPRINT'] is None:
+		print('==========================================================')
+		print('Error.  The SERVER_FINGERPRINT variable is not set.')
+		print('Set this in the config file and try again.')
+		print('The actual keys are generated using the nm_create_keys, ' \
+			+ 'and the nm_sign program (part of: ' \
+			+ 'https://github.com/naturalmessage/natmsgv).')
+		print('The offline private key should be created on a permanently '\
+			+ 'offline computer (the offline public key goes to your server. ')
+		print('You can also contact Robert Hoot using the contact ' \
+		'page at naturalmessage.com for direct assistance for free ' \
+		'(for the server only).')
+
+	else:
+		SERVER_FINGERPRINT = cherrypy.config['SERVER_FINGERPRINT']
+		print('The server fingerprint from the external option file ' \
+			+ 'is: ' + SERVER_FINGERPRINT)
+
+
+	#input('press a key to continue...')
+	HOSTNAME = cherrypy.config['HOSTNAME']
+	DBNAME = cherrypy.config['DBNAME']
+	DB_UNAME = cherrypy.config['DB_UNAME']
+	DB_PW = cherrypy.config['DB_PW']
+
+	ONLINE_PUB_SIGN_KEY_FNAME = cherrypy.config['ONLINE_PUB_SIGN_KEY_FNAME']
+	fail_if_not_exist(ONLINE_PUB_SIGN_KEY_FNAME, 'online pub sign key')
+	
+	ONLINE_PRV_SIGN_KEY_FNAME = cherrypy.config['ONLINE_PRV_SIGN_KEY_FNAME']
+	fail_if_not_exist(ONLINE_PRV_SIGN_KEY_FNAME, 'online prv sign key')
+	# I have to feed this file to the shardfuncs setting:
+	shardfuncs.ONLINE_PRV_SIGN_KEY_FNAME = ONLINE_PRV_SIGN_KEY_FNAME
+	
+	ONLINE_PUB_ENC_KEY_FNAME = cherrypy.config['ONLINE_PUB_ENC_KEY_FNAME']
+	fail_if_not_exist(ONLINE_PUB_ENC_KEY_FNAME, 'online pub enc key')
+	
+	ONLINE_PRV_ENC_KEY_FNAME = cherrypy.config['ONLINE_PRV_ENC_KEY_FNAME']
+	fail_if_not_exist(ONLINE_PRV_ENC_KEY_FNAME, 'online prv enc key')
+	
+	OFFLINE_PUB_SIGN_KEY_FNAME = cherrypy.config['OFFLINE_PUB_SIGN_KEY_FNAME']
+	fail_if_not_exist(OFFLINE_PUB_SIGN_KEY_FNAME, 'offline pub sign key')
+
+	# The crontab check should run as root.
+	CRONTAB_ROOT = cherrypy.config['CRONTAB_ROOT']
+		
+	crontab_msg = '=============================================================' \
+		+ os.linesep + 'Error.  You must schedule the housekeeping_shardsvr.py' \
+		+ 'file under the natmsg ID for crontab.  This program will ' \
+		+ 'delete old, unread shards when they expire.  You have to ' \
+		+ 'verify the correct path to the python3 program and to the ' \
+		+ 'housekeeping program, but the general format is: ' + os.linesep \
+		+ '* 2 * * * /usr/local/bin/python3 /var/natmsg/ousekeeping_shardsvr.py'
+	if not os.path.isfile(os.path.join(CRONTAB_ROOT, 'natmsg')):
+		print(crontab_msg)
+		sys.exit(983)
+
+	try:
+		fd = open(os.path.join(CRONTAB_ROOT, 'natmsg'), 'r')
+		cron_dat = fd.read()
+		fd.close()
+	except:
+		raise RuntimeError(crontab_msg)
+
+	if cron_dat.find('housekeeping') < 0:
+		raise RuntimeError(crontab_msg)
+
+	if shardfuncs.ONLINE_PRV_SIGN_KEY_FNAME == '':
+		print('shardfuncs.ONLINE_PRV_SIGN_KEY_FNAME is not set.')
+		print('You must get this value from the option file and put it in')
+		print('shardfuncs.ONLINE_PRV_SIGN_KEY_FNAME.')
+		sys.exit(19)
+
+	# verify that the fingerprint in the config file matches the fingerprint
+	# of the offline public sign key
+
+	with open(OFFLINE_PUB_SIGN_KEY_FNAME, 'rb') as fd:
+		dat = fd.read()
+	
+	dgst = hashlib.sha384(dat)
+	chk_fp = base64.b16encode(dgst.digest()).decode('utf-8').upper()
+	if chk_fp != SERVER_FINGERPRINT:
+		print('==========================================================')
+		print('Error. The fingerprint in the config file does not match ' \
+			+ 'the SHA384 of the OFFLINE_PUB_SIGN_KEY_FNAME ' \
+			+ 'file: ' + OFFLINE_PUB_SIGN_KEY_FNAME)
+		print('If you moved programs to a new machine, generate a new ' \
+			+ 'offline key for the new server.')
+		sys.exit(800)
+	
+
+	CONN_STR = "host=" + HOSTNAME + " dbname=" + DBNAME + " user=" \
+				+ DB_UNAME + " password='" + DB_PW + "'"
+	# pass some data to shardfuncs
+
+	if CONN_STR == '':
+		print('Error.  The database connection string is blank.')
+		sys.exit(150)
+
+	# test if the database is online
+	conn, msg_d = shardfuncs.shard_connect(CONN_STR)
+	if conn is None:
+		print('Error. Could not connect to the datase.  Is it Running?  ' \
+			+ 'Try running /root/psqlgo.sh for the natural message start script.')
+		sys.exit(15)
+	else:
+		conn.close()
+	#- - - - - - - - - - - - - - - - - - - - 
+	# This is for error messages generated by the shard server.
+	shardfuncs.LOGFILE = cherrypy.config['LOGFILE']
+
+	return(conf)
+
+	#././././././././././././././././././././././././././././././././././././
+
+
 
 ##############################################################
 class StringGenerator(object):
@@ -103,228 +388,207 @@ class StringGenerator(object):
 		else:
 			return(fd.read())
 
-	@cherrypy.expose
-	@cherrypy.tools.encode(encoding='UTF-8')
-	def webform_admin(self):
-
-		return("""<html>
-			<head></head>
-			<body>
-			<p>Send an 	ENCRYPTED  message to the administrators.  The message is encrypted using the 
-         webmaster&quot;s public key, and the private key is not online.</p>
-
-			<form method="get" action="/webform_admin_process">
-			<p>Enter your message below</p>
-
-			<input type="text" SIZE=2000 MAXSIZE=7000 value="" name="msgtxt" />
-			<button type="submit">Send!</button>
-			</form>
-			</body>
-			</html>""")
 
 	@cherrypy.expose
 	@cherrypy.tools.json_out()
 	def nm_version(self):
-		return({'nm_version': NM_VERSION_STRING,
-		'once test': repr(bin(cherrypy.wsgiserver.wsgiserver3.server.ssl_adapter.context.options))})
+		return({'nm_version': NM_VERSION_STRING})
 			
 
 	@cherrypy.expose
 	@cherrypy.tools.json_out()
 	def nm_db_table_names(self, nonce=None):
-		"""Dump a list of tables with their definitions.
 		"""
+		Dump a list of tables with their definitions.  This can be used to
+		confirm the version of the database tables.
+
+		On success, this will set {'status': 'OK'} and {'results': tb_data}
+		under the dictionary key of nm_db_table_names. On failure, the status
+		will be set to Error.
+		"""
+		global CONN_STR
+
 		out={}
+		# ./././././././.../..../.../././././././.
+		def nm_db_table_fetch(CONN_STR, out ):
+			"""
+			This performs the database call for this page generator.
 
+			This adds keys for status and resutls to the 'out' dictionary.
+			"""
+			conn, msg_d = shardfuncs.shard_connect(CONN_STR)
+			if conn is None:
 	
-		if nonce is not None:
-			sig_dict_tmp = shardfuncs.sign_nonce(nonce)
+				raise RuntimeError(shardfuncs.err_log(110015, 'Failed to ' \
+					+ 'make a database connection in ' \
+					+ 'nm_db_table_names', extra_msg=msg_d))
+			
+			cur = conn.cursor()
 			try:
-				sig_b64_dict = sig_dict_tmp['sign_nonce']  #['signature_b64']
-			except KeyError:
-				rc = 7740
-				msg =  'The signature did not work. The sign_nonce() method returned' \
-					+ json.dumps(sig_dict_tmp)
-				out.update(shardfuncs.log_err(rc, msg))
-				return({'validateServer': out})
+				cmd = "SELECT *  FROM information_schema.columns " \
+					+ "WHERE table_schema NOT IN ('information_schema', 'pg_catalog');"
+				rc, my_data, msg_d = shardfuncs.shard_sql_select(cur, cmd)
+				if rc != 0:
+					raise RuntimeError(shardfuncs.err_log(110001, 'SQL SELECT ' \
+							+ 'statement command failed in ' \
+							+ 'nm_db_table_names.', extra_msg=msg_d))
+			
+				#if my_data[0][0]:  #
+				if my_data and my_data[0] and isinstance(my_data[0], tuple):
+					tb_data = {}
+					recnbr = 0
+					for rec in my_data:
+						# for each row of data (contains infromation
+						# on each column in the sharddb database)
+						tb_data.update({str(recnbr): rec})
+						recnbr = recnbr + 1
+			
+					# The database results are prepared here:
+					out.update({'status': 'OK'})
+					out.update({'results': tb_data})
+				else:
+					raise RuntimeError(shardfuncs.err_log(110020, 'Failed to ' \
+						+ 'get the table structure from  ' \
+						+ 'information_schema.'))
+			except Exception as my_exc:
+				cur.close()
+				conn.close()
+				raise RuntimeError(shardfuncs.err_log(1121, 'Failure fetching ' \
+					+ 'database data for ' \
+					+ 'nm_db_table_names.')) from my_exc
 
-			out.update(sig_b64_dict)
+			return(out)
+	
+		# ./././././././.../..../.../././././././.
+		# The main part of this page generator:
+		try:
+			if nonce:
+				sig_dict_tmp = shardfuncs.sign_nonce(nonce=nonce)
+				if sig_dict_tmp is None:
+					raise RuntimeError('110010: The signature did not work. The sign_nonce() ' \
+					+ 'method returned' )
 
-		conn, msg_d = shardfuncs.shard_connect(CONN_STR)
-		if conn is None:
-			return({'nm_db_table_names': msg_d})
-		
-		cur = conn.cursor()
-		
-		# Select \dt shard.*
-		# ideas: select * from information_schema.tables;
-		# select * from information_schema.columns;
-		# select table_schema from information_schema.columns group by table_schema order by table_schema;
-		# SELECT table_name
-		# FROM information_schema.tables
-		# WHERE table_type = 'BASE TABLE'
-		# AND table_schema NOT IN
-		#   ('pg_catalog', 'information_schema');
-		#
-		# SELECT * FROM information_schema.columns WHERE table_name = 'shards';
-		#
-		# SELECT *  FROM information_schema.columns where table_schema NOT IN ('information_schema', 'pg_catalog');
+				# This gets {'signature_b64': Base64OfTheNonce}
+				out.update(sig_dict_tmp['sign_nonce'])
 
-		cmd = "SELECT *  FROM information_schema.columns where table_schema NOT IN ('information_schema', 'pg_catalog');"
-		rc, my_data, msg_d = shardfuncs.shard_sql_select(cur, cmd)
-		if rc != 0:
-			msg = 'SQL SELECT statement command failed in nm_db_table_names.'
-			out.update(shardfuncs.log_err(rc, msg))
-			out.update({'Error-detail-not-logged': msg_d})
-			cur.close()
-			conn.close()
-			return({'nm_db_table_names': out})
+			out = nm_db_table_fetch(CONN_STR, out )
+		except:
+			return(shardfuncs.nm_err_dict('nm_db_table_names'))
 
-		if my_data[0][0]:
-			tb_data = {}
-			recnbr = 0
-			for rec in my_data:
-				# for each row of data (contains information
-				# on each column in the sharddb database)
-				tb_data.update({str(recnbr): rec})
-				recnbr = recnbr + 1
-
-			out.update({'status': 'OK'})
-			out.update({'results': tb_data})
-			return({'nm_db_table_names': out})
-		else:
-			rc = 8100
-			msg = 'Failed to get the table structure from  information_schema.'
-			out.update(shardfuncs.log_err(rc, msg))
-			return({'nm_db_table_names': out})
-
-
-		rc = 8200
-		msg = 'impossible to get to this point?'
-		out.update(shardfuncs.log_err(rc, msg))
 		return({'nm_db_table_names': out})
 
 
-	@cherrypy.expose
-	@cherrypy.tools.json_out()
-	def webform_admin_process(self, msgtxt, debug=False):
-		# Accept the form input from webform_admin,
-		# put the textdirectly into a smd_create in JSON format,
-		# send to the admin id.
-		#
-		# The Requests lib for python comes from
-		# http://docs.python-requests.org/en/latest/user/install/#get-the-code
-		# and the downloaded directory looks something like this:
-		#  kennethreitz-requests-359659c
-
-		import io
-		import requests
-		import base64
-		#import subprocess
-		import tempfile
-
-		out = {}
-		dbg = False
-
-		# Python seems to get the data type right, but 
-		# this might be safer than making assumptions.
-		if type(debug) == type('str'):
-			if debug.lower() in ('true', 't'):
-				dbg = True
-		elif type(debug) == type(True):
-			if debug:
-				dbg = True
-
-		# First create a single shard, unencrypted, unsplit.
-		shard_id = re.sub(r'[=]*', '', 'SID'  \
-				+ bytes.decode(binascii.b2a_hex(os.urandom(16))).upper()[0:32])
-
-
-		mytmp= 'tmpwebfrm' + bytes.decode(binascii.b2a_hex(os.urandom(6))).upper()[0:6]
-		rc, msg_d = shardfuncs.gpg_enc_str(io.StringIO(msgtxt), 
-			default_gpg_id=cherrypy.config['srvr_enc_id'], 
-			recipient_gpg_id=cherrypy.config['webmaster_enc_id'], output_fname=mytmp)
-		if rc != 0:
-			msg = 'I could not encrypt the webform message. GPG returned ' + str(rc)
-			rc = 8300 # my err nbr, not GPG's
-			out.update(shardfuncs.log_err(rc, msg, show_python_err=True))
-
-			# Error detail using msg_d from GPG.
-			rc = 8400
-			out.update(shardfuncs.log_err(rc, msg_d, key='GPG_ERR')) 
-			return({'webform_admin_process': out})
-			
-
-		fd_enc = codecs.open(mytmp, 'r', 'utf-8')
-		dat = fd_enc.read()
-		fd_enc.close()
-		url = 'http://127.0.0.1:80/shard_create?shard_id=' + str(shard_id)
-		
-		# The 'file' that I am sending is really JSON tha tis here in memory.
-		attached_files = {'shard_data': ('overrideinputfilenamegoeshere', 
-			dat,
-			'application/x-download', {'Expires': '0'})}
-		#		io.StringIO(enctxt),
-		if dbg:
-			out.update({'DEBUG2001': 'before request'})
-
-		try:
-			r = requests.post(url, files=attached_files)
-		except:
-			rc = 8500
-			msg = 'I could not put the data into shard_create.'
-			out.update(shardfuncs.log_err(rc, msg, show_python_err=True))
-			return({'webform_admin_process': out})
-
-		# The shard is ready, now create a smd and deliver to the admin
-FIX ID XXX
-		url = 'http://127.0.0.1:9090/smd_create?public_recipient=PUB0000000190DC85ED44F10BA8789CC694BAF52CE44881B649CA5D3837D455B1EF61F1EA11'
-
-		# The "file" that I am attaching is actually JSON that is here in memory.
-		# and contains only the link to the shard.
-		attached_files = {'shard_metadata': ('overrideinputfilenamegoeshere', io.StringIO('{"url": "http://127.0.0.1:9090/shard_read?shard_id=' + shard_id + '"}' ), 'application/x-download', {'Expires': '0'})}
-
-		try:
-			r = requests.post(url, files=attached_files)
-		except:
-			rc = 8600
-			msg = 'I could not post the shard metadata.'
-			out.update(shardfuncs.log_err(rc, msg, show_python_err=True))
-			return({'webform_admin_process': out})
-
-
-		out.update({'status': 'OK'})
-		if dbg:
-			out.update({'DEBUG2000': repr(r.text)})
-		return({'webform_admin_process': out})
 
 	############################################################
 	############################################################
 	@cherrypy.expose
 	@cherrypy.tools.json_out()
-	def server_local_settings(self, debug=False, public_recipient=None, 
-			shard_metadata=None, nonce=None):
+	def server_local_settings(self, public_recipient=None, shard_metadata=None,
+		nonce=None, debug=False ):
+		"""
+		This will return a list of settings used for the live server.
+		Note ready yet.
+		"""
 		# These should come from settings in an option file
 		global NM_VERSION_STRING
 
 		out = {}
 
-		if nonce is not None:
-			sig_dict_tmp = shardfuncs.sign_nonce(nonce)
-			try:
-				sig_b64_dict = sig_dict_tmp['sign_nonce']  #['signature_b64']
-			except KeyError:
-				rc = 7740
-				msg =  'The signature did not work. The sign_nonce() method returned' \
-					+ json.dumps(sig_dict_tmp)
-				out.update(shardfuncs.log_err(rc, msg))
-				return({'validateServer': out})
+		try:
+			if nonce:
+				sig_dict_tmp = shardfuncs.sign_nonce(nonce=nonce)
+				if sig_dict_tmp is None:
+					raise RuntimeError('110010: The signature did not work. The sign_nonce() ' \
+					+ 'method returned' )
 
-			out.update(sig_b64_dict)
+				# This gets {'signature_b64': Base64OfTheNonce}
+				out.update(sig_dict_tmp['sign_nonce'])
 
-
-		out.update({'version': NM_VERSION_STRING})
+		except:
+			return(shardfuncs.nm_err_dict('server_local_settings'))
+	
+		out.update({'version': NM_VERSION_STRING})#xxx
 		return({'server_local_settings': out})
+	############################################################
+	############################################################
+	############################################################
+	@cherrypy.tools.json_out()
+	@cherrypy.expose
+	def validateServer(self, nonce=None, debug=False):
+		"""
+		This will accept a small file (a nonce) that the server
+		will sign with its online private key and return
+		a detached signature file.
+
+		The client can verify the server using this process:
+		1) Using the result of this requist, as the 'signature'
+		   of the original nonce.
+		2) Grab the 'signature of the online key by the offline key'
+		   for the server in question and confirm that signature.
+		   That info is available in the serverFarmTest web page on
+		   the main Natural Message server.
+		3) Confirm that the fingerprint in the server config file
+		   matches the SHA384 of the offline public key.
+		Note that the main Natural Message operator will check
+		for any changes in the online key that are inconsistent
+		with historical data.
+		"""
+
+		# Function:
+		# 1) read a 'shard' that contains the nonce (maybe allow only tiny
+		#    file sizes).
+		# 2) Run a python subprocess to call the C program
+		#    to sign the nonce (I am calling a C program because I
+		#    did not find a good python library for libgcrypt by itself
+		#    and there was a conflict between version of libgcrypt
+		#    capabilities for 1.5 and 1.6).
+		global CONN_STR
+
+		out ={}
+		dbg = False
+		sig_b64_dict = None
+		sig_dict_tmp = None
+
+		try:
+			# Python seems to get the data type right, but
+			# this might be safer than making assumptions.
+			if type(debug) == type('str'):
+				if debug.lower() in ('true', 't'):
+					dbg = True
+			elif type(debug) == type(True):
+				if debug:
+					dbg = True
+
+			if nonce is not None:
+				#### sig_dict_tmp = shardfuncs.sign_nonce(nonce)
+				#### try:
+				#### 	sig_b64_dict = sig_dict_tmp['sign_nonce']  #['signature_b64']
+				#### except KeyError:
+				#### 	rc = 120100
+				#### 	msg =  'The signature did not work. The sign_nonce() method returned' \
+				#### 		+ json.dumps(sig_dict_tmp)
+				#### 	out.update(shardfuncs.log_err(rc, msg))
+				#### 	return({'validateServer': out})
+
+				#### out.update(sig_b64_dict)
+				sig_dict_tmp = shardfuncs.sign_nonce(nonce=nonce)
+				if sig_dict_tmp is None:
+					raise RuntimeError('110010: The signature did not work. The sign_nonce() ' \
+					+ 'method returned' )
+
+				# This gets {'signature_b64': Base64OfTheNonce}
+				out.update(sig_dict_tmp['sign_nonce'])
+				
+			else:
+				raise RuntimeError('120120: There was no nonce passed to validateServer. You need to ' \
+					+ 'upload a file called "nonce".')
+		except Exception:
+			return(shardfuncs.nm_err_dict('serverValidate'))
+			
+
+		# final return
+		return({'serverValidate': out})
+	
 	############################################################
 	############################################################
 	############################################################
@@ -348,244 +612,229 @@ FIX ID XXX
 		# WHICH CAN BE SET IN THE CONF FILE.
 		global SHARD_PW_BYTES
 		global DAY_CODES
+		global CONN_STR
 
 		out ={} 
 		dbg = False
+		msg_d = None
 
-		# Python seems to get the data type right, but 
-		# this might be safter than making assumptions.
-		if type(debug) == type('str'):
-			if debug.lower() in ('true', 't'):
-				dbg = True
-		elif type(debug) == type(True):
-			if debug:
-				dbg = True
+		#././././././././././././././././././././././././././././././././././
+		def db_write(CONN_STR, shard_id, shard_data, dbg, out):
+			# This verifies that the shard ID is in a good format.
+			# The random part of the IDs are validated by validate_id_chars(),
+			# which restricts it to HEX, _ and -.
+			# The character set also avoid directory traversal attacks for shards
+			# that are stored on disk (e.g., ID name of '/etc/passwd').
+			global DAY_CODES
+			global SHARD_ROOT
 
+			rc, msg_d = shardfuncs.verify_id_format(shard_id, expected_prefix='SID')
 
-		if nonce is not None:
-			sig_dict_tmp = shardfuncs.sign_nonce(nonce)
-			try:
-				sig_b64_dict = sig_dict_tmp['sign_nonce']  #['signature_b64']
-			except KeyError:
-				rc = 7740
-				msg =  'The signature did not work. The sign_nonce() method returned' \
-					+ json.dumps(sig_dict_tmp)
-				out.update(shardfuncs.log_err(rc, msg))
-				return({'validateServer': out})
+			if( rc != 0):
+				raise RuntimeError('9000: The format of the shard ID was bad: ')
 
-			out.update(sig_b64_dict)
-
-		if (shardfuncs.ALLOW_NEW_MSGS != True):
-			# The flag in /opt/python3/lib/python3.4/site-packages/shardfuncs.py
-			# (or wherever it is in the sys.path path),
-			# has been unset. Do not allow new messages to be created,
-			# but allow old ones to be read
-			rc = 8700
-			msg = 'The main server responded, but is not accepting new messages.'
-			out.update(shardfuncs.log_err(rc, msg))
-			return({'shard_create': out})
+			#------------------------------------------------------------
+			# set up database connection
+			conn, msg_d = shardfuncs.shard_connect(CONN_STR)
+			if conn is None:
+				raise RuntimeError('9010: Connection to database failed ')
 		
-		if dbg:
-			if shard_data is not None:
-				shardfuncs.json_keyval({'DEBUG0010': 'I HAVE THE SHARD DATA.'})
-				shardfuncs.json_keyval({'DEBUG0020': 'Here it is ' + repr(shard_data)})
-		
-		##out.update({'DEBUG0030': 'HEADERCHECK ' + repr(cherrypy.tools.response_headers.__dict__)})
-		###out.update({'DEBUG0033': 'HEADERCHECK ' + repr(cherrypy.tools.__dict__)})
-		###out.update({'DEBUG0035': 'HEADERCHECK ' + repr(cherrypy.tools.flatten.__dict__)})
-		###out.update({'DEBUG0036': 'toolscheck  ' + repr(cherrypy.request.__dict__)})
-		##out.update({'DEBUG0037': 'toolscheck  ' + repr(cherrypy.request.headers)})
-		
-		cont_len = 0
-		is_chunked = False
-		is_multipart = False
-
-
-		# see if the user passed a shard_id, 
-		# if so verify its format
-		if shard_id is None:
-			rc = 8900
-			msg =  'The shard_id is missing from shard_create.'
-			out.update(shardfuncs.log_err(rc, msg))
-			return({'shard_create': out})
-		rc, msg_d = shardfuncs.verify_id_format(shard_id, expected_prefix='SID')
-
-
-		if( rc != 0):
-			rc = 9000
-			msg =  'The format of the shard ID was bad: '
-			out.update(shardfuncs.log_err(rc, msg))
-
-			out.update({'Error-detail-not-logged': msg_d['Error']})
-			if shard_id is not None:
-				if dbg:
-					out.update({'DEBUG0100': 'the shard ID was %s.' % (repr(shard_id))})
-
-			return({'shard_create': out})
-
-		#------------------------------------------------------------
-		# set up database connection
-		conn, msg_d = shardfuncs.shard_connect(CONN_STR)
-		if conn is None:
-			return({'shard_create': msg_d})
-	
-		cur = conn.cursor()
-		
-		#------------------------------------------------------------
-		# Reject the request if the record already exists.
-		# This protects against a "Server Rewrite Attack" through
-		# which a corrupt directory server could simply read the 
-		# messages and recreate the shards under the same name so
-		# that nobody would ever know.  This implies that the datbase
-		# record is retained a bit beyond the normal maximum potential
-		# lifespan of the shard.  The best protection against the rewrite
-		# attack would be either the shared secret to encrypt the metadata
-		# with a key that the server can never get, or use out of band
-		# communication (across a different network).
-		# Right now, I have to check two sources, but eventually there will
-		# be one shard table.
-		cmd = "SELECT shardsvr.shard_id_exists('%s');" % (shard_id)
-		rc, my_data, msg_d = shardfuncs.shard_sql_select(cur, cmd)
-		if rc != 0:
-			rc = 9100
-			msg =  'SQL SELECT statement command failed in shard_create ' \
-				+ 'when checking shard ID existence.'
-			out.update(shardfuncs.log_err(rc, msg))
-
-			out.update({'Error-detail-not-logged': msg_d['Error']})
-			cur.close()
-			conn.close()
-			return({'shard_create': out})
-
-		if my_data[0][0]:
-			# Reject a request to overwrite a shard that 
-			# existed recently (even if the shard data has been deleted).
-			rc = 9200
-			msg =  'Shard ID existed recently.  You can not overwrite shards.'
-			out.update(shardfuncs.log_err(rc, msg))
-			cur.close()
-			conn.close()
-			return({'shard_create': out})
-
-		# Test if the file was uploaded
-		if shard_data is not None:
-			cryptor = shardfuncs.RNCrypt_zero()	
-			# strip leading path from file name to avoid directory traversal attacks
-			###fn = os.path.basename(shard_id) # add a subdirectory from last 2 chars
-
-			# send data from shard_data to output.
-			# MODIFY THIS TO GET A BLOCK AT A TIME AND STOP IF 
-			# THE FILE IS TOO BIG.
-			f_in = None
-			try:
-				f_in = shard_data.file
-				dat = f_in.read() # This produces a python bytes() object.
-				f_in.close()
-			except:
-				rc = 9300
-				msg =  'Could not read the shard data from network package.  ' \
-					+ "Try naming the file 'shard_data' and try again."
-				out.update(shardfuncs.log_err(rc, msg, show_python_err=True))
-				return({'shard_create': out})
-
-			# random day count between about 20 and 40
-			del_day_count = int((int.from_bytes(os.urandom(1), byteorder='little')) \
-				/ 256.0 * 20) + 20
-		
-			today = datetime.date.today()
-			day_code = DAY_CODES[today.weekday()]
-			shard_path = '/var/natmsg/shards/' + day_code
-			exp_date = datetime.date.today() + datetime.timedelta(days=6)
-			del_date = datetime.date.today() + datetime.timedelta(days=del_day_count)
-		
-			if cherrypy.config['shard_encrypt_version'] == 1:
-				# dat will now be bytes
-				encrypted_data = cryptor.encrypt(dat, SHARD_PW_BYTES)
-			elif cherrypy.config['shard_encrypt_version'] == 0:
-				# Now that dat is bytes, unecrypted will probably cause an error,
-				# but we shold not be using this anyway.
-				encrypted_data = dat
-			else:
-				print('Unexpected shard_encrypt_version during create: ' \
-					+ repr(cherrypy.config['shard_encrypt_version']))
-				rc = 9500
-				msg =  'The requested encryption format for shards was not' \
-					+ 'expected: ' + repr(cherrypy.config['shard_encrypt_version'])
-				out.update(shardfuncs.log_err(rc, msg))
-				return({'shard_create': out})
-
-			f = None
-			try:
-				f = open(shard_path + '/' + shard_id, 'wb')
-			except:
-				rc = 9600
-				msg =  'Failed to open the shard file for writing.'
-				out.update(shardfuncs.log_err(rc, msg, show_python_err=True))
-				return({'shard_create': out})
-
-			try:
-				if isinstance(encrypted_data, bytes):
-					# writing binary 
-					f.write(encrypted_data)
-				else:
-					f.write(bytes(encrypted_data, 'utf-8'))
-			except:
-				rc = 9605
-				msg =  'Failed to write the shard to disk.'
-				out.update(shardfuncs.log_err(rc, msg, show_python_err=True))
-				return({'shard_create': out})
-
-			f.close()
-		
-		
-			# The sql command wants the date in a an odd format, so do it here.
-			# PostgreSQL wants the date like this, including the quotes: '2014-09-29'::date 
-			expire_dt_sql = "'" + str(exp_date.year) + "-" + str(exp_date.month).zfill(2) + "-" \
-				+ str(exp_date.day).zfill(2) + "'::date "
-		
-			del_dt_sql = "'" + str(del_date.year) + "-" + str(del_date.month).zfill(2) + "-" \
-				+ str(del_date.day).zfill(2) + "'::date "
-		
-		
-			# Note that the code here does not need to add quotes around the date values.
-			cmd = "INSERT INTO shardsvr.big_shards(" \
-			+ "  big_shard_id, " \
-			+ "  delete_db_entry_on_date, " \
-			+ "  expire_on_date, " \
-			+ "  encryption_format, " \
-			+ "  day_code) " \
-			+ "values('%s', %s, %s, %d, '%s');" % (shard_id, \
-			del_dt_sql , \
-			expire_dt_sql, \
-			cherrypy.config['shard_encrypt_version'], \
-			day_code)
-		
-		
-			rc, msg_d = shardfuncs.shard_sql_insert(cur, cmd)
+			cur = conn.cursor()
+			
+			#------------------------------------------------------------
+			# Reject the request if the record already exists.
+			# This protects against a "Server Rewrite Attack" through
+			# which a corrupt directory server could simply read the 
+			# messages and recreate the shards under the same name so
+			# that nobody would ever know.  This implies that the datbase
+			# record is retained a bit beyond the normal maximum potential
+			# lifespan of the shard.  The best protection against the rewrite
+			# attack would be either the shared secret to encrypt the metadata
+			# with a key that the server can never get, or use out of band
+			# communication (across a different network).
+			# Right now, I have to check two sources, but eventually there will
+			# be one shard table.
+			cmd = "SELECT shardsvr.shard_id_exists('%s');" % (shard_id)
+			rc, my_data, msg_d = shardfuncs.shard_sql_select(cur, cmd)
 			if rc != 0:
-				rc = 9700 # the other rc is irrelevant
-				msg =  'SQL insert command failed in shard_create.'
-				out.update(shardfuncs.log_err(rc, msg))
-
-				rc = 9800
-				out.update(rc, msg_d, key='Error-detail')
-
 				cur.close()
 				conn.close()
-				return({'shard_create': out})
+				rc = 9100
+				msg = 'SQL SELECT statement command failed in shard_create ' \
+					+ 'when checking shard ID existence.'
+				shardfuncs.log_err(rc, msg_d)
+				raise RuntimeError(str(rc) + ': ' + msg)
+
+			if my_data[0][0]:
+				# The return record is not None.
+				# Reject a request to overwrite a shard that 
+				# existed recently (even if the shard data has been deleted).
+				cur.close()
+				conn.close()
+				raise RuntimeError('9200: Shard ID existed recently.  You can not overwrite shards.')
+
+			# Test if the file was uploaded
+			if shard_data is None:
+				cur.close()
+				conn.close()
+				raise RuntimeError('9900: No file was uploaded.  You must upload a file with the post parameter name "shard_data".')
 			else:
-				cur.execute('commit;')
-				cur.close()
-				conn.close()
-				out.update({'status': "OK"})
+				# send data from shard_data to output.
+				# MODIFY THIS TO GET A BLOCK AT A TIME AND STOP IF 
+				# THE FILE IS TOO BIG.
+				f_in = None
+				try:
+					f_in = shard_data.file
+				except:
+					raise RuntimeErro('9300: Could not read the shard data from network package.  ' \
+						+ "Try naming the file 'shard_data' and try again.")
+
+				try:
+					dat = f_in.read() # This produces a python bytes() object.
+				except:
+					f_in.close()
+					raise RuntimeError('9323: could not read the uploaded shard')
+
+				f_in.close()
+
+				# random day count between about 20 and 40
+				del_day_count = int((int.from_bytes(os.urandom(1), byteorder='little')) \
+					/ 256.0 * 20) + 20
+			
+				today = datetime.date.today()
+				day_code = DAY_CODES[today.weekday()]
+				shard_path = os.path.join(SHARD_ROOT, day_code)
+				shard_fname = os.path.join(shard_path,  shard_id)
+				exp_date = datetime.date.today() + datetime.timedelta(days=6)
+				del_date = datetime.date.today() + datetime.timedelta(days=del_day_count)
+			
+				if cherrypy.config['shard_encrypt_version'] == 1:
+					# dat will now be bytes
+					cryptor = shardfuncs.RNCrypt_zero()	
+					encrypted_data = cryptor.encrypt(dat, SHARD_PW_BYTES)
+				elif cherrypy.config['shard_encrypt_version'] == 0:
+					# Now that dat is bytes, unecrypted will probably cause an error,
+					# but we shold not be using this anyway.
+					encrypted_data = dat
+				else:
+					raise RuntimeError('9500: The requested encryption format for shards was not' \
+						+ 'expected: ' + repr(cherrypy.config['shard_encrypt_version']))
+
+				f = None
+				try:
+					f = open(shard_fname, 'wb')
+				except:
+					raise RuntimeError('9600: Failed to open the shard file for writing.')
+
+				try:
+					if isinstance(encrypted_data, bytes):
+						# writing binary 
+						f.write(encrypted_data)
+					else:
+						f.write(bytes(encrypted_data, 'utf-8'))
+				except:
+					f.close()
+					raise RuntimeError('9605: Failed to write the shard to disk.')
+
+				if f.fileno():
+					os.fsync(f.fileno())
+				f.close()
+			
+			
+				# The sql command wants the date in a an odd format, so do it here.
+				# PostgreSQL wants the date like this, including the quotes: '2014-09-29'::date 
+				expire_dt_sql = "'" + str(exp_date.year) + "-" + str(exp_date.month).zfill(2) + "-" \
+					+ str(exp_date.day).zfill(2) + "'::date "
+			
+				del_dt_sql = "'" + str(del_date.year) + "-" + str(del_date.month).zfill(2) + "-" \
+					+ str(del_date.day).zfill(2) + "'::date "
+			
+			
+				# Note that the code here does not need to add quotes around the date values.
+				cmd = "INSERT INTO shardsvr.big_shards(" \
+				+ "  big_shard_id, " \
+				+ "  delete_db_entry_on_date, " \
+				+ "  expire_on_date, " \
+				+ "  encryption_format, " \
+				+ "  day_code) " \
+				+ "values('%s', %s, %s, %d, '%s');" % (shard_id, \
+				del_dt_sql , \
+				expire_dt_sql, \
+				cherrypy.config['shard_encrypt_version'], \
+				day_code)
+			
+			
+				rc, msg_d = shardfuncs.shard_sql_insert(cur, cmd)
+				if rc != 0:
+					cur.close()
+					conn.close()
+					shardfuncs.log_err(9700, msg_d)
+					raise RuntimeError('9700: SQL insert command failed in shard_create.')
+				else:
+					cur.execute('commit;')
+					cur.close()
+					conn.close()
+					out.update({'status': "OK"})
 				
-			cur.close()
-			conn.close()
-		
-		else:
-			rc = 9900
-			msg =  'No file was uploaded.  You must upload a file with the post parameter name "shard_data".'
-			out.update(shardfuncs.log_err(rc, msg))
+			return(out)
+
+		# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+		def process_args(debug, nonce, shard_id, out): 
+			# Python seems to get the data type right, but 
+			# this might be safter than making assumptions.
+			dbg = False
+
+			if isinstance(debug, str):
+				if debug.lower() in ('true', 't'):
+					dbg = True
+			elif isinstance(debug, bool):
+				if debug:
+					dbg = True
+
+			if nonce:
+				sig_dict_tmp = shardfuncs.sign_nonce(nonce=nonce)
+				if sig_dict_tmp is None:
+					raise RuntimeError('110010: The signature did not work. The sign_nonce() ' \
+					+ 'method returned' )
+
+				# This gets {'signature_b64': Base64OfTheNonce}
+				out.update(sig_dict_tmp['sign_nonce'])
+
+			if (shardfuncs.ALLOW_NEW_MSGS != True):
+				# The flag in /opt/python3/lib/python3.4/site-packages/shardfuncs.py
+				# (or wherever it is in the sys.path path),
+				# has been unset. Do not allow new messages to be created,
+				# but allow old ones to be read
+				raise RuntimeError('8700: The main server responded, but is not accepting new messages.')
+			
+			if dbg:
+				if shard_data is not None:
+					shardfuncs.json_keyval({'DEBUG0010': 'I HAVE THE SHARD DATA.'})
+					shardfuncs.json_keyval({'DEBUG0020': 'Here it is ' + repr(shard_data)})
+			
+			##out.update({'DEBUG0030': 'HEADERCHECK ' + repr(cherrypy.tools.response_headers.__dict__)})
+			###out.update({'DEBUG0033': 'HEADERCHECK ' + repr(cherrypy.tools.__dict__)})
+			###out.update({'DEBUG0035': 'HEADERCHECK ' + repr(cherrypy.tools.flatten.__dict__)})
+			###out.update({'DEBUG0036': 'toolscheck  ' + repr(cherrypy.request.__dict__)})
+			##out.update({'DEBUG0037': 'toolscheck  ' + repr(cherrypy.request.headers)})
+			
+
+			# see if the user passed a shard_id, 
+			# if so verify its format
+			if shard_id is None:
+				raise RuntimeError('8900" The shard_id is missing from shard_create.')
+
+			return((dbg, out))
+		#././././././././././././././././././././././././././././././././././././
+		#         main processing for this page generator starts here
+		#
+		try:
+			dbg, out = process_args(debug, nonce, shard_id, out)
+			out = db_write(CONN_STR, shard_id, shard_data, dbg, out)
+		except Exception as my_exc:
+			return(shardfuncs.nm_err_dict('shard_create'))
+
+		#././././././././././././././././././././././././././././././././././././
 
 
 		# final return
@@ -613,507 +862,237 @@ FIX ID XXX
 
 		I should clone this and make another version that
 		just spits back the file as a download.
+
+		It does not make sense to ask for the signed nonce
+		in here because I return just the data -- I would 
+		have to switch to a multipart or the user should
+		make a separate call to validate the server.
 		"""
 		### WARNING. IF YOU UPDATE THIS ROUTINE
 		### CHECK IF THE SERVERVALIDATION() METHOD
 		### NEEDS THE SAME CHANGES.
 		global SHARD_PW_BYTES
+		global CONN_STR
 
 		big_data = None
 		out ={} 
 		dbg = False
-		cont_len = 0
-		is_chunked = False
-		is_multipart = False
 
-		# Python seems to get the data type right, but 
-		# this might be safter than making assumptions.
-		if type(debug) == type('str'):
-			if debug.lower() in ('true', 't'):
-				dbg = True
-		elif type(debug) == type(True):
-			if debug:
-				dbg = True
+		def process_args(debug, nonce, shard_id, out): 
+			# Python seems to get the data type right, but 
+			# this might be safter than making assumptions.
+			dbg = False
 
-		if nonce is not None:
-			sig_dict_tmp = shardfuncs.sign_nonce(nonce)
+			if isinstance(debug, str):
+				if debug.lower() in ('true', 't'):
+					dbg = True
+			elif isinstance(debug, bool):
+				if debug:
+					dbg = True
+
+			if nonce:
+				sig_dict_tmp = shardfuncs.sign_nonce(nonce=nonce)
+				if sig_dict_tmp is None:
+					raise RuntimeError('110010: The signature did not work. The sign_nonce() ' \
+					+ 'method returned' )
+
+				# This gets {'signature_b64': Base64OfTheNonce}
+				out.update(sig_dict_tmp['sign_nonce'])
+
+			if dbg:
+				if shard_data is not None:
+					shardfuncs.json_keyval({'DEBUG0010': 'I HAVE THE SHARD DATA.'})
+					shardfuncs.json_keyval({'DEBUG0020': 'Here it is ' + repr(shard_data)})
+
+			return((dbg, out))
+
+		def check_shard_status(CONN_STR, shard_id, conn, cur):
+			cmd = str("SELECT burned, expired, delete_db_entry_on_date, " \
+				+ "encryption_format, day_code " \
+				+ "FROM shardsvr.big_shards " \
+				+ "WHERE  big_shard_id = '%s';" % (shard_id))
+
+			my_data = None
+			rc, my_data, msg_d = shardfuncs.shard_sql_select(cur, cmd)
+			if rc != 0:
+				cur.close()
+				conn.close()
+				raise RuntimeError('6700: SQL SELECT statement command failed in shard_read.')
+
+			if my_data is None:
+				cur.close()
+				conn.close()
+				raise RuntimeError('6800: SQL fetch of the shard data failed.')
+
+			if len(my_data) > 0:
+				# The "[0][0]" array notation here selects the first data row 
+				# (row #0) and the first col (col #0), and the next one
+				# gets data from the second column (col # 1).
+				brn = my_data[0][0]
+				exp = my_data[0][1]
+				del_date = my_data[0][2]
+				encryption_format = my_data[0][3]
+				day_code = my_data[0][4]
+
+				return({'brn': brn, 'exp': exp, 'del_date': del_date, 
+					'encryption_format': encryption_format, 'day_code': day_code})
+			else:
+				# The shard was not found 
+				return(None)
+
+		def fetch_shard_data(shard_path, shard_id, status, conn, cur):
+
+			cryptor = shardfuncs.RNCrypt_zero()	
 			try:
-				sig_b64_dict = sig_dict_tmp['sign_nonce']  #['signature_b64']
-			except KeyError:
-				rc = 7740
-				msg =  'The signature did not work. The sign_nonce() method returned' \
-					+ json.dumps(sig_dict_tmp)
-				out.update(shardfuncs.log_err(rc, msg))
-				return({'validateServer': out})
+				f = open(shard_path + '/' + shard_id, 'rb')
+			except:
+				cur.close()
+				conn.close()
+				raise RuntimeError('6900: Could not open the shard for reading.')
 
-			out.update(sig_b64_dict)
-
-		## out.update({'DEBUG0030': 'HEADERCHECK ' + repr(cherrypy.tools.response_headers.__dict__)})
-		## #out.update({'DEBUG0033': 'HEADERCHECK ' + repr(cherrypy.tools.__dict__)})
-		## #out.update({'DEBUG0035': 'HEADERCHECK ' + repr(cherrypy.tools.flatten.__dict__)})
-		## #out.update({'DEBUG0036': 'toolscheck  ' + repr(cherrypy.request.__dict__)})
-		## out.update({'DEBUG0037': 'toolscheck  ' + repr(cherrypy.request.headers)})
-		
-		for k, v in cherrypy.request.headers.items():
-			if k.lower() == 'content-length':
-				is_chunked = False
-				cont_len = int(v)
-			elif k.lower() == 'transfer-encoding' and 'chunked' in v.lower():
-				is_chunked = True
-
-			if k.lower() == 'content-type' and 'multipart' in v.lower():
-				is_multipart = True
-		
-		# see if the user passed a shard_id, 
-		# if so verify its format
-		if shard_id is None:
-			rc = 10000
-			msg =  'The shard_id was missing in shard_read.'
-			out.update(shardfuncs.log_err(rc, msg))
-			return({'shard_read': out})
-
-		rc, msg_d = shardfuncs.verify_id_format(shard_id, expected_prefix='SID')
-
-		if( rc != 0):
-			rc = 11000
-			msg = 'The format of the shard ID was bad: '
-			out.update(shardfuncs.log_err(rc, msg))
-
-			out.update({'Error-detail': msg_d['Error']})
-			if shard_id is not None:
-				if dbg:
-					out.update({'DEBUG0100': 'the shard ID was %s.' % (repr(shard_id))})
-
-			return({'shard_read': out})
-
-		conn, msg_d = shardfuncs.shard_connect(CONN_STR)
-		if conn is None:
-			return({'shard_read': msg_d})
-
-		cur = conn.cursor()
-
-		cmd = str("SELECT burned, expired, delete_db_entry_on_date, " \
-			+ "encryption_format, day_code " \
-			+ "FROM shardsvr.big_shards " \
-			+ "WHERE  big_shard_id = '%s';" % (shard_id))
-
-		my_data = None
-		rc, my_data, msg_d = shardfuncs.shard_sql_select(cur, cmd)
-		if rc != 0:
-			rc = 6700
-			msg = 'SQL SELECT statement command failed in shard_read.'
-			out.update(shardfuncs.log_err(rc, msg))
-
-			out.update({'Error-detail-not-logged': msg_d['Error']})
-			cur.close()
-			conn.close()
-			return({'shard_read': out})
-
-		## REMOVED NOV 19 FOR SHARD BURN cur.close()
-		## REMOVED NOV 19 FOR SHARD BURN conn.close()
-
-		### test out.update({'rc': repr(rc)})
-		### test out.update({'msg_d': repr(msg_d)})
-		### test out.update({'my_data': repr(my_data)})
-		### test return({'shard_read': out})
-		
-		if my_data is None:
-			rc = 6800
-			msg = 'SQL fetch of the shard data failed.'
-			out.update(shardfuncs.log_err(rc, msg))
-			cur.close()
-			conn.close()
-			return({'shard_read': out})
-
-		if len(my_data) > 0:
-			# The "[0][0]" array notation here selects the first data row 
-			# (row #0) and the first col (col #0), and the next one
-			# gets data from the second column (col # 1).
-			brn = my_data[0][0]
-			exp = my_data[0][1]
-			del_date = my_data[0][2]
-			encryption_format = my_data[0][3]
-			day_code = my_data[0][4]
-			if day_code == ' ':
-				shard_path = '/var/natmsg/shards'
-			else:
-				shard_path = '/var/natmsg/shards/' + day_code
-
-			## print('shard_read TEST: ' + repr(my_data))
-			## print('shard_read TEST: ' + repr(brn))
-			## print('shard_read TEST: ' + repr(exp))
-			## print('shard_read TEST: ' + repr(del_date))
-
-			if not brn and not exp:
-				# The shard has not burned and not expired
-
-				cryptor = shardfuncs.RNCrypt_zero()	
+			if status['encryption_format'] == 1:
+				# Read the data and decrypt using the
+				# method that was coded in the database
+				# for this shard.  This would theoretically
+				# Allow me to change the encryption method
+				# on a live server -- code newly created
+				# shards with the new algo, and the olds ones
+				# will be processed with the old one, until
+				# the old ones are all gone in 5 or so days.
 				try:
-					f = open(shard_path + '/' + shard_id, 'rb')
+					dat_in = f.read()
 				except:
-					rc = 6900
-					msg = 'Could not open the shard for reading.'
-					out.update(shardfuncs.log_err(rc, msg))
-					try:
-						cur.close()
-						conn.close()
-					except:
-						pass
-					return({'shard_read': out})
-				if encryption_format == 1:
-					# Read the data and decrypt using the
-					# method that was coded in the database
-					# for this shard.  This would theoretically
-					# Allow me to change the encryption method
-					# on a live server -- code newly created
-					# shards with the new algo, and the olds ones
-					# will be processed with the old one, until
-					# the old ones are all gone in 5 or so days.
-					try:
-						dat_in = f.read()
-					except:
-						f.close()
-						rc = 7000
-						msg = 'Error reading the shard file.'
-						out.update(shardfuncs.log_err(rc, msg, show_python_err=True))
-						out.update({'errdetail': repr(sys.exc_info()[0])})
-						try:
-							cur.close()
-							conn.close()
-						except:
-							pass
-						return({'shard_read': out})
-
+					cur.close()
+					conn.close()
 					f.close()
+					raise RuntimeError('7000: Error reading the shard file.')
 
-					try:
-						# The regular RNCryptor (in early 2015) expected str output
-						# so use Bob's override version here. This now returns bytes().
-						big_data = cryptor.decrypt(dat_in, SHARD_PW_BYTES)
-					except:
-						rc = 7001
-						msg = 'Error decrypting the shard file.  The umodified RNCryptor routine seems to expect UTF-8, ' \
-								+ 'but I use a modified post_decrypt routine to avoid this error.  If you see this error, ' \
-								+ 'it could mean that you need to restore my RNCryptor class redefinition.'
-						out.update(shardfuncs.log_err(rc, msg, show_python_err=True))
-						out.update({'errdetail': repr(sys.exc_info()[0])})
-						try:
-							cur.close()
-							conn.close()
-						except:
-							pass
-						return({'shard_read': out})
+				f.close()
 
-					dat_in = None
+				try:
+					# The regular RNCryptor (in early 2015) expected str output
+					# so use Bob's override version here. This now returns bytes().
+					big_data = cryptor.decrypt(dat_in, SHARD_PW_BYTES)
+				except:
+					cur.close()
+					conn.close()
+					raise RuntimeError('7001: Error decrypting the shard file.  The umodified RNCryptor routine seems to expect UTF-8, ' \
+							+ 'but I use a modified post_decrypt routine to avoid this error.  If you see this error, ' \
+							+ 'it could mean that you need to restore my RNCryptor class redefinition.')
 
-				elif encryption_format == 0:
-					# We always use encryption, so this line should not run
-					big_data = f.read()
-					f.close()
-				else:
-					rc = 7100
-					msg = 'Unknown encryption format returned for this shard.'
-					out.update(shardfuncs.log_err(rc, msg))
-					try:
-						cur.close()
-						conn.close()
-					except:
-						pass
-					return({'shard_read': out})
+				dat_in = None
 
-
-				if (big_data is None):
-					rc = 7200
-					msg = 'OOPS. I do not have the big data'
-					out.update(shardfuncs.log_err(rc, msg))
-					try:
-						cur.close()
-						conn.close()
-					except:
-						pass
-					return({'shard_read': out})
-				else:
-					# RETURN THE DATA xxx
-					# RETURN THE DATA xxx
-					# RETURN THE DATA xxx
-					# RETURN THE DATA xxx
-					# RETURN THE DATA xxx
-					# RETURN THE DATA xxx
-					cherrypy.response.headers['Content-Type'] = 'application/x-download'
-					if not isinstance(big_data, bytes):
-						big_data = bytes(big_data, 'utf-8')
-
-					return(big_data)
+			elif status['encryption_format'] == 0:
+				# We always use encryption, so this line should not run
+				big_data = f.read()
+				f.close()
 			else:
-				if brn:
-					rc = 7300
-					msg = 'The shard has already been read: ' + shard_id 
-					out.update(shardfuncs.log_err(rc, msg))
-					try:
-						cur.close()
-						conn.close()
-					except:
-						pass
-					return({'shard_read': out})
-				elif  datetime.date.today() > del_date or exp:
-					rc = 7400
-					msg = 'The shard has expired (too old).'
-					out.update(shardfuncs.log_err(rc, msg))
-					try:
-						cur.close()
-						conn.close()
-					except:
-						pass
+				cur.close()
+				conn.close()
+				raise RuntimeError('7100: Unknown encryption format returned for this shard.')
 
-					return({'shard_read': out})
-			
-			# INSERT THE big SHARD DELETION PROCESS HERE.
-			# RUN THE STORED PREOCEDURE TO DELETE AND SET ALL THE FLAGS
-			# INSERT THE SHARD DELETION PROCESS HERE.
-			# RUN THE STORED PREOCEDURE TO DELETE AND SET ALL THE FLAGS
-			# INSERT THE SHARD DELETION PROCESS HERE.
-			# RUN THE STORED PREOCEDURE TO DELETE AND SET ALL THE FLAGS
+			if (big_data is None):
+				cur.close()
+				conn.close()
+				raise RuntimeError('7200: OOPS. I do not have the big data')
+			else:
+				# RETURN THE DATA xxx
 
+				return(big_data)
+
+		# -  -- - - - - 
+		def burn_shard(shard_id, status, conn, cur):
+			"""
+			The shard has already been read, so set the burn flag.
+
+			Don't worry about setting the expire flag--that is done
+			elsewhere, and I always check the data anyway.
+			"""
 			# The burn process is done in two steps:
 			#  1) run the shard_burn(shard_id) stored procedure,
 			#  2) erase the shard from disk.
-			if not brn and not exp:
-				# The shard has not burned and not expired,
+			smd_data = None
+			# Burn the shard using the shard_delete stored procedure: 
+			cmd = "SELECT * FROM shardsvr.shard_burn('%s');" % (shard_id)
+			rc, smd_data, msg_d = shardfuncs.shard_sql_select(cur, cmd)
 
-				smd_data = None
-				# Burn the shard using the shard_delete stored procedure: 
-				cmd = "SELECT * FROM shardsvr.shard_burn('%s');" % (shard_id)
-				rc, smd_data, msg_d = shardfuncs.shard_sql_select(cur, cmd)
-				#### older: #if rc == 0:
-				## nov 19
-				if smd_data is None:
-					rc = 7500
-					msg = 'SQL delete statement failed.'
-					out.update(shardfuncs.log_err(rc, msg))
-					out.update({'Error-Detail': repr(msg_d)})
-					try:
-						cur.close()
-						conn.close()
-					except:
-						pass
-					return({'shard_read': out})
-
-				if smd_data[0] == 0:
-					rc = 7600
-					msg = 'SQL delete statement command returned 0 rows. ' \
-						+ 'Transaction was rolled back.'
-					out.update(shardfuncs.log_err(rc, msg))
-					try:
-						cur.close()
-						conn.close()
-					except:
-						pass
-					return({'shard_read': out})
-
-				# erase the shard file
-				os.remove(shard_path + os.path.sep + shard_id)
-		
-		else:
-			out.update({'Error': 'The SQL select ran, but the big shard was not found.'})
-			out.update({'Error-detail': repr(my_data) + repr(msg_d)})
-			try:
+			if smd_data is None:
+				shardfuncs.log_err(7500,  repr(msg_d))
 				cur.close()
 				conn.close()
-			except:
-				pass
-			return({'shard_read': out})
+				raise RuntimeError('7500: SQL burn command failed.')
 
-		# final return
-		out.update({'status': "OK"})
+			if smd_data[0] == 0:
+				cur.close()
+				conn.close()
+				shardfuncs.log_err(7600,  'SQL burn command returned zero rows.')
+				raise RuntimeError('7600: SQL delete/burn statement command returned 0 rows. ' \
+					+ 'Transaction was rolled back.')
+
+			# Erase the "big" shard file from disk
+			if status['day_code'] == ' ':
+				shard_path = SHARD_ROOT
+			else:
+				shard_path = os.path.join(SHARD_ROOT, status['day_code'])
+
+			os.remove(shard_path + os.path.sep + shard_id)
+
+			return(True)	
+
+		# -  -- - - - - 
+		def get_shard(CONN_STR, shard_id, out):
+			global SHARD_ROOT
+
+			conn, msg_d = shardfuncs.shard_connect(CONN_STR)
+			if conn is None:
+				raise RuntimeError('983845: Could not make database connection in shard_read.')
+
+			cur = conn.cursor()
+
+			status = check_shard_status(CONN_STR, shard_id, conn, cur)
+			if status is None:
+				# The shard was not found.  I can not get it
+				raise RuntimeError('983855: Shard was not found (not burned, not expired, just not found.')
+
+			if status['day_code'] not in ('a', 'b', 'c', 'd', 'e', 'f', 'g'):
+				raise RuntimeError('Failed to get a valid day code for shard storage: ' + str(shard_id))
+			else:
+				shard_path = os.path.join(SHARD_ROOT,  status['day_code'])
+
+			if not status['brn'] and not status['exp']:
+				if  datetime.date.today() > status['del_date']:
+					raise RuntimeError('837374: The shard has already expired.')
+				else:
+					big_data = fetch_shard_data(shard_path, shard_id, status, conn, cur)
+			else:
+				if status['brn']:
+					raise RuntimeError('837374: The shard has already burned.')
+				elif status['exp']:
+					raise RuntimeError('837375: The shard has already expired.')
+				else:
+					raise RuntimeError('837376: The shard was not available (unknown reason).')
+
+			return(( big_data, status, conn, cur, out))
+		#./././././...//.././././././.././.././.././.././.../.../././
+		#           This is the main part of this page generator
+		#
 		try:
-			cur.close()
-			conn.close()
+			dbg, out = process_args(debug, nonce, shard_id, out)
+			big_data, status, conn, cur, out = get_shard(CONN_STR, shard_id, out)
+			burn_shard(shard_id, status, conn, cur) # failures here are bad!
+
+			# RETURN THE DATA in binary format -- set headers first. 
+			# RETURN THE DATA in binary format -- set headers first. 
+			# RETURN THE DATA in binary format -- set headers first. 
+			cherrypy.response.headers['Content-Type'] = 'application/x-download'
+			if not isinstance(big_data, bytes):
+				big_data = bytes(big_data, 'utf-8')
 		except:
-			pass
-		return({'shard_read': out})
+			return(shardfuncs.nm_err_dict('shard_read', out=out))
 
-	############################################################
-	############################################################
-	############################################################
-	############################################################
-	############################################################
-	############################################################
-	@cherrypy.expose
-	@cherrypy.tools.json_out()
-	def webform_admin_inbox_read(self, debug=False):
-		# This will read the speical, unencrypted webform data
-		# for the admin account
-		import io
-		import requests
-		import base64
-
-		out={}
-
-		# read the inbox
-		# PRV0000000103A409C79F4561CEF2D03BF2EF09A4FC09B38D0BCF692CFD7954443391AFE147
-		
-		url = 'http://127.0.0.1:80/inbox_read?dest_private_box_id=PRV0000000103A409C79F4561CEF2D03BF2EF09A4FC09B38D0BCF692CFD7954443391AFE147'
-		try:
-			r = requests.post(url)
-		except:
-			out.update({'Error': 'I could not read the inbox for the admin webform stuff'})
-			return({'webform_admin_inbox_read': out})
-
-		##out.update({'test': r.text})
-		try:
-			# j is a dictionary object
-			j = json.loads(r.text)
-		except:
-			out.update({'Error': 'I could not get the JSON from the inbox.'})
-			return({'webform_admin_inbox_read': out})
-
-		idx = 0
-		bad_msg_count = 0
-		for k, v in j['inbox_read'].items():
-			if len(k) == 75:
-				# This dictionary item will contain a JSON object that
-				# contains a few keys, including shard_metdata.
-				
-				## out.update({'Message' + str(idx): v['shard_metadata']})
-				shard_url = None
-				try:
-					shard_url = json.loads(v['shard_metadata'])['url']
-				except:
-					# Show the python error info and exit.
-					# Later I will simply note the error and continue
-					out.update({'Error': repr(sys.exc_info()[0])})
-					return({'webform_admin_inbox_read': out})
-					
-				# ----------------------------------------
-				# I have a shard_url, now grab it.
-				try:
-					r = requests.post(shard_url)
-				except:
-					out.update({'Error': 'I could not put the data into shard_create.'})
-					return({'webform_admin_process': out})
-
-				try:
-					# try to get the content of the message within the JSON
-					msg_j = json.loads(r.text)['shard_read']['shard_data']
-				except:
-					out.update({'Error': repr(sys.exc_info()[0])})
-					out.update({'Error-detail': r.text})
-					return({'webform_admin_inbox_read': out})
-
-				out.update({'realmsg' + str(idx): msg_j})
-			idx += 1
-
-		#out.update({'test2': j['inbox_read']['shard_metadata']})
-		return({'webform_admin_inbox_read': out})
-		
-	############################################################
-	############################################################
-	@cherrypy.tools.json_out()
-	@cherrypy.expose
-	def validateServer(self, nonce=None, debug=False):
-		"""validateServer
-		This will accept a small file (a nonce) that the server
-		will sign with its online private key and return
-		a detached signature file.
-
-		The client can verify the server using this process:
-		1) Using the result of this requist, as the 'signature'
-		   of the original nonce.
-		2) Grab the 'signature of the online key by the offline key'
-		   for the server in question and confirm that signature.
-		   That info is available in the serverFarm web page on
-		   the main Natural Message server.
-		3) confirm that the fingerprint in the server config file
-		   matches the SHA384 of the offline public key.
-		Note that the main Natural Message operator will check
-		for any changes in the online key that are inconsistent
-		with historical data.
-
-		This routine contains of the shard_create (big) method
-		from dec 2014 because I was not sure how some of the
-		information would be handled internally.  This might
-		be better if there was a common routine that was called
-		by shard_create and this.
-		"""
-
-		# Function:
-		# 1) read a 'shard' that contains the nonce (maybe allow only tiny file sizes).
-		# 2) Run a python subprocess to call the C program 
-		#    to sign the nonce (I am calling a C program because I 
-		#    did not find a good python library for libgcrypt by itself
-		#    and there was a conflict between version of libgcrypt
-		#    capabilities for 1.5 and 1.6).
-
-		out ={} 
-		dbg = False
-		sig_b64_dict = None
-		sig_dict_tmp = None
-
-
-		# Python seems to get the data type right, but 
-		# this might be safer than making assumptions.
-		if type(debug) == type('str'):
-			if debug.lower() in ('true', 't'):
-				dbg = True
-		elif type(debug) == type(True):
-			if debug:
-				dbg = True
-
-		if nonce is not None:
-			sig_dict_tmp = shardfuncs.sign_nonce(nonce)
-			try:
-				sig_b64_dict = sig_dict_tmp['sign_nonce']  #['signature_b64']
-			except KeyError:
-				rc = 7740
-				msg =  'The signature did not work. The sign_nonce() method returned' \
-					+ json.dumps(sig_dict_tmp)
-				out.update(shardfuncs.log_err(rc, msg))
-				return({'validateServer': out})
-
-			out.update(sig_b64_dict)
-			
-		else:
-			# Empty nonce
-			rc = 7800
-			msg =  'There was no nonce passed to validateServer. You need to ' \
-				+ 'upload a file called "nonce".'
-			out.update(shardfuncs.log_err(rc, msg))
-			return({'validateServer': out})
-
-		# final return
-		return({'serverValidate': out})
-
-	
-	############################################################
-	############################################################
-	############################################################
-	############################################################
-	############################################################
-	@cherrypy.expose
-	@cherrypy.tools.json_out()
-	def canary(self, nonce=None):
-    # canary msg.
-		# This will eventually read a database table and show
-		# the newest entry.  The json should be accompanied by
-		# a detached sig using a private key that is not online.
-		out = {}
-##		out.update({'prolegomena': {'author': 'Robert Hoot', 'date': 'Sep 9, 2014', 'title': 'webmaster', 'contact_id': 'PUB1111111xyz', 'alert_key': 'Alert level 0 means that there is nothing interesting to report.  Alert level 5 means that something very very very interesting has happened or is about to happen.', 'status_archives': 'https://naturalmessage.com/notreayyet'}, 'alert_level': 0, 'statements': {'statement01': 'The SSL secret keys for this web site have not been supplied to any outside person or agency--no keys for any machines on this site have been compromised (to the best of my knowledge).', 'statement02': 'I have not inserted any malware or spyware to enable any outsider to gain access to any client information that is obtained from any of the machines that comprise this web site.', 'statement03': 'I have not worked with any person or agency to defeat any security feature of this site or any of the shard servers that are accessed by this site.', 'statement04': 'I have taken precautions to prevent unauthoried access to this machine, and I have no new report of any security breachs.', 'statement05': 'I have not been tortured related to my free speech activities or my involvement with this web site', 'statement06': 'I am not aware of any person who is involved in server operations is under pressure from an outside person or agency to comprimise the security of this web site.', 'statement07': 'In this calendar month, I have responded to warrants that affect 0 users.'}})
-
-		if nonce is not None:
-			sig_dict_tmp = shardfuncs.sign_nonce(nonce)
-			try:
-				sig_b64_dict = sig_dict_tmp['sign_nonce']  #['signature_b64']
-			except KeyError:
-				rc = 7740
-				msg =  'The signature did not work. The sign_nonce() method returned' \
-					+ json.dumps(sig_dict_tmp)
-				out.update(shardfuncs.log_err(rc, msg))
-				return({'validateServer': out})
-
-			out.update(sig_b64_dict)
-
-		return(out)
-
+		return(big_data)
+		# - - - - 
+		#./././././...//.././././././.././.././.././.././.../.../././
 
 	############################################################
 	############################################################
@@ -1236,6 +1215,9 @@ FIX ID XXX
 			f_in = shard_data.file
 			f = open('/var/natmsg/shards/' + mix_id, 'w')
 			f.write(f_in.read().decode('utf8'))
+			if f.fileno():
+				# sync to disk to be sure it is there
+				os.fsync(f.fileno())
 			f.close()
 			f_in.close()
 		
@@ -1328,11 +1310,11 @@ if __name__ == '__main__':
 		print('The shard password is bad.  Quitting now.')
 		sys.exit(12)
 
-	# The config file contains ip, port, fingerprint, 
-	# and a few other things:
-	cherrypy.config.update(cp_config_fname)
 
-	cp_id_fname = cherrypy.config['natmsg_root'] + os.sep + 'cp_shard_' + NM_VERSION_STRING + '.pid'
+	# try loading config now AND in the loop below.  I need some
+	# settings for the custom ssl thing.
+	load_config()
+
 	# I will now load a cusomized version of 
 	# /usr/local/lib/python3.4/site-packages/cherrypy/wsgiserver/ssl_builtin.py
 	# to make my own ssl-adapter because the default one is
@@ -1341,120 +1323,47 @@ if __name__ == '__main__':
 		cherrypy.config['server.ssl_certificate'],
 		cherrypy.config['server.ssl_private_key'])
 
+
 	cherrypy.wsgiserver.wsgiserver3.ssl_adapters.update({"bob": "ssl_builtin_bob.BuiltinSSLAdapter"})
-
-	# Connection keep-alive is depricated because connections are kept open until Connection: close is sent by the server?
-	#('Connection', 'close'), 
-	conf = {
-		'global':{'request.show_tracebacks':True,
-		'server.ssl_module': 'bob',
-		'log.access_file': '',
-		'log.screen': True,
-		'tools.response_headers.on': True,
-		'tools.response_headers.headers': [('Cache-Control', ' no-cache,no-store,max-age=0'), ('Strict-Transport-Security', '')]
-		},
-		'/': {
-		'tools.sessions.on': False,
-		'tools.staticdir.root': os.path.abspath(os.getcwd())
-		},
-		'/account_create': {
-		'tools.response_headers.on': True,
-		'tools.response_headers.headers': [('Connection', 'close'), ('Cache-Control', ' no-cache,no-store,max-age=0'),  ('Strict-Transport-Security', '')]
-		},
-		'/shard_create': {
-		'tools.response_headers.on': True,
-		'tools.response_headers.headers': [('Connection', 'close'), ('Cache-Control', ' no-cache,no-store,max-age=0'),  ('Strict-Transport-Security', '')]
-		},
-		'/shard_read': {
-		'tools.response_headers.on': True,
-		'tools.response_headers.headers': [('Connection', 'close'), ('Cache-Control', ' no-cache,no-store,max-age=0'),  ('Strict-Transport-Security', '')]
-		},
-		'/shard_create': {
-		'tools.response_headers.on': True,
-		'tools.response_headers.headers': [('Connection', 'close'), ('Cache-Control', ' no-cache,no-store,max-age=0'),  ('Strict-Transport-Security', '')]
-		},
-		'/webform_admin_process': {
-		'tools.response_headers.on': True,
-		'tools.response_headers.headers': [('Connection', 'close'), ('Cache-Control', ' no-cache,no-store,max-age=0'),  ('Strict-Transport-Security', '')]
-		},
-		'/webform_admin_inbox_read': {
-		'tools.response_headers.on': True,
-		'tools.response_headers.headers': [('Connection', 'close'), ('Cache-Control', ' no-cache,no-store,max-age=0'),  ('Strict-Transport-Security', '')]
-		},
-		"/favicon.ico":
-		{
-			"tools.staticfile.on": True,
-			"tools.staticfile.filename":
-						 "/var/natmsg/html/favicon.png"
-		},
-		'/static': {
-		'tools.staticdir.on': True,
-		'tools.staticdir.dir': './public'
-		},
-		'/validateServer': {
-		'tools.response_headers.on': True,
-		'tools.response_headers.headers': [('Cache-Control', ' no-cache,no-store,max-age=0'), ('Connection', 'keep-alive'), ('Content-Type', 'application/x-download')]
-		}
-	}
-	
-	##'tools.response_headers.headers': [('Transfer-Encoding', 'chunked'), ('Content-Type' 'text/html;charset=utf-8'), ('Connection', 'keep-alive')]
-
-
-	##cherrypy.engine.subscribe('start', setup_database)
-
-	##cherrypy.engine.subscribe('stop', cleanup_database)
-
-	# server pidfile (this registers the ID number of the running
-	# instance as shown in 'ps -A' terminal command). 
-	if os.path.isfile(cp_id_fname):
-		print('Error. the program ID file already exists: ' \
-			+ cp_id_fname + '.')
-		print('Maybe there is another instance using this file ' \
-			+ 'or it is there from a prior crash.')
-		sys.exit(9012)
-
-	PIDFile(cherrypy.engine, cp_id_fname).subscribe()
-
-	if cherrypy.config['SERVER_FINGERPRINT'] is None:
-		print('Error.  The SERVER_FINGERPRINT setting is not set.')
-		print('Set this in the natmsg-prod.cfg (or -test) file.')
-
-	else:
-		SERVER_FINGERPRINT = cherrypy.config['SERVER_FINGERPRINT']
-		print('The server fingerprint from the external option file ' \
-			+ 'is: ' + SERVER_FINGERPRINT)
-
-
-	#input('press a key to continue...')
-	HOSTNAME = cherrypy.config['HOSTNAME']
-	DBNAME = cherrypy.config['DBNAME']
-	DB_UNAME = cherrypy.config['DB_UNAME']
-	DB_PW = cherrypy.config['DB_PW']
-	ONLINE_PUB_SIGN_KEY_FNAME=cherrypy.config['ONLINE_PUB_SIGN_KEY_FNAME']
-	ONLINE_PRV_SIGN_KEY_FNAME=cherrypy.config['ONLINE_PRV_SIGN_KEY_FNAME']
-	ONLINE_PUB_ENC_KEY_FNAME=cherrypy.config['ONLINE_PUB_ENC_KEY_FNAME']
-	ONLINE_PRV_ENC_KEY_FNAME=cherrypy.config['ONLINE_PRV_ENC_KEY_FNAME']
-	OFFLINE_PUB_SIGN_KEY_FNAME=cherrypy.config['OFFLINE_PUB_SIGN_KEY_FNAME']
-
-	CONN_STR = "host=" + HOSTNAME + " dbname=" + DBNAME + " user=" + DB_UNAME + " password='" + DB_PW + "'"
-	# pass some data to shardfuncs
-	shardfuncs.ONLINE_PRV_SIGN_KEY_FNAME=cherrypy.config['ONLINE_PRV_SIGN_KEY_FNAME']
-	shardfuncs.LOGFILE = cherrypy.config['LOGFILE']
-
-	#- - - - - - - - - - - - - - - - - - - - 
-	# test if the database is online
-	conn, msg_d = shardfuncs.shard_connect(CONN_STR)
-	if conn is None:
-		print('Error. Could not connect to the datase.  Is it Running?  Try running /root/psqlgo.sh for the natural message start script.')
-		sys.exit(15)
-	#- - - - - - - - - - - - - - - - - - - - 
 
 	# The user needs to call this with root privileges,
 	# then the following command drops to the natmsg user ID.
 	DropPrivileges(cherrypy.engine, gid=cherrypy.config['dropto_gid'], 
 		uid=cherrypy.config['dropto_uid']).subscribe()
+
+	# After dropping to natmsg user id, see if I can
+	# write to the shard directory:
+	tst_fname = os.path.join(SHARD_ROOT, 'a', 'junktest.txt')
+	try:
+		fd = open(tst_fname, 'w')
+		fd.write("This is a file to be sure that I can write to this directory")
+		fd.close()
+	except:
+		print('Error. Could not write a test file to the shards directory:' \
+			+ tst_fname)
+		sys.exit(34)
+
 	webapp = StringGenerator()
-	#webapp.generator = StringGeneratorWebService()
-	cherrypy.quickstart(webapp, '/', conf)
-	# The quickstart command above is short for the tree.mount, server start, 
-	# and cherrypy.engine.start().
+	####webapp.generator = StringGeneratorWebService()
+	##cherrypy.quickstart(webapp, '/', conf)
+
+	# The following loop allows the server to restart and to
+	# reload config options if it should fail for some reason.
+	while True:
+		# if the server dies, you can restart it without having to re-enter the
+		# Natural Message shard server password (because the password has
+		# already been processes).
+		print('+++++++ Top of the main loop')
+		cherrypy.server.httpserver = None
+		conf = load_config()
+		###cherrypy.tree.mount(StringGenerator(), "/", config)
+		
+		cherrypy.tree.mount(StringGenerator(), "/", conf)
+		cherrypy.engine.signals.subscribe()
+		cherrypy.engine.start() 
+		cherrypy.engine.block() # run until the sever dies
+		print('=======**** The server should be running. You should not see ' \
+			'this line until after the server is reset.')
+		time.sleep(3) # leave this here to make it easier to quit the loop
+       
+
