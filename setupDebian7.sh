@@ -25,6 +25,30 @@
 # The command "dpkg-query -l 'python*'" showed python3 but without
 # a version number.
 # Also use apt-cache search PKGNAME
+################################################################################
+confirm(){
+  local tmp_FIN="N"
+  local yn=''
+  local MY_PROMPT="$1"
+  if (test -z "${MY_PROMPT}"); then
+    local MY_PROMPT="${MSG_CONTINUE}"
+  fi
+  while (test "${tmp_FIN}" = "N"); do
+    read -p "$MY_PROMPT" yn
+
+    case "${yn}" in
+      # Note: there can be many commands inside the "case"
+      # block, but the last one in each block must end with
+      # two semicolons.
+      'y'|'Y')
+        tmp_FIN="Y";;
+      'n'|'N')
+        tmp_FIN="Y";
+        return 12;;
+    esac
+  done;
+  return 0
+}
 
 ################################################################################
 apt-get install screen
@@ -53,6 +77,7 @@ read -p  "Press ENTER t ocontinue or Ctl-c to quit." junk
 ################################################################################
 #                     CHECK EACH OF THESE OPTIONS
 #
+SOURCE_DIR=$(dirname "$0")
 iface='eth0'
 
 PGUSER_HOME='/var/lib/postgresql'  # on centOS, I use /home/postgres
@@ -188,6 +213,13 @@ fi
 chown natmsg:natmsg /var/natmsg/private
 chmod 700 /var/natmsg/private
 
+if [ ! -d /var/natmsg/private/TestKeys ]; then
+	mkdir /var/natmsg/private/TestKeys
+fi
+chown natmsg:natmsg /var/natmsg/private/TestKeys
+chmod 700 /var/natmsg/private/TestKeys
+
+
 if [ ! -d /var/natmsg/shards ]; then
 	mkdir /var/natmsg/shards
 fi
@@ -238,6 +270,27 @@ if [ ! -d /var/natmsg/shards/a ]; then
 	chown -R natmsg:natmsg /var/natmsg/shards
 	chmod -R 700 /var/natmsg/shards/
 fi
+
+
+# Install some fake server keys for quick testing.
+if [ ! -s "/var/natmsg/private/TestKeys/JUNKTESTOfflinePUBSignKey.key" ]; then
+	# The sql file is not in the permanent place..
+	if [ -s "${SOURCE_DIR}/private/TestKeys/JUNKTESTOfflinePUBSignKey.key" ]; then
+		# Copy the sql from the untarred github directory
+		echo "Copying SQL from ${SOURCE_DIR}"
+		cp -r "${SOURCE_DIR}/private/TestKeys" /var/natmsg/private
+		chmod 700 /var/natmsg/private
+		chown -R natmsg:natmsg /var/natmsg/private
+	else
+		echo "Error. I can not find the source sql files. They should be in"
+		echo "the sql subdirectory in the github file."
+		exit 493
+	fi
+fi
+
+
+
+
 # ntpdate will disappear, but it works for now
 apt-get install ntpdate
 # sync the time
@@ -631,7 +684,7 @@ if [	-d pyopenssl-master ]; then
 else
 	echo "Error. The pyopenssl-master directory does not exist"
 fi
-python3 setup.py install --user
+/usr/local/bin/python3 setup.py install --user
 
 # PyOpenSSL is not enough.  I need to compile _ssl, used by 
 # https://hg.python.org/cpython/file/default/Lib/ssl.py 
@@ -949,7 +1002,6 @@ if grep '^postgres[:]' /etc/passwd; then
 	chown -R postgres:postgres "${PGUSER_HOME}"
 fi
 
-SOURCE_DIR=$(dirname "$0")
 echo "Source DIR is ${SOURCE_DIR}"
 
 if [ ! -s "${PGUSER_HOME}/shardsvr/sql/0010setup.sql" ]; then

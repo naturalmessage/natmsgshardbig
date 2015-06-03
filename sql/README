@@ -1,0 +1,6 @@
+The files in the SQL directory should go to a place where
+the postgres user ID can own them.
+
+The default home on CentOS7 for the postgres user ID is /home/postgres.
+On Debian 7 it is /var/lib/postgresql. For Debian 7, put the .sql files
+in /var/lib/postgresql/shardsvr/sql

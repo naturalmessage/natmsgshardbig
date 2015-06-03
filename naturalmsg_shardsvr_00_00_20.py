@@ -262,6 +262,11 @@ def load_config():
 			+ 'is: ' + SERVER_FINGERPRINT)
 
 
+	if cherrypy.config['server.socket_host'] == 'YOUR.SERVER.IP.ADDRESS':
+		print('Error. You did not set the server.socket_host in the config file:')
+		print(cp_config_fname)
+		sys.exit(4398)
+
 	#input('press a key to continue...')
 	HOSTNAME = cherrypy.config['HOSTNAME']
 	DBNAME = cherrypy.config['DBNAME']
@@ -285,6 +290,13 @@ def load_config():
 	OFFLINE_PUB_SIGN_KEY_FNAME = cherrypy.config['OFFLINE_PUB_SIGN_KEY_FNAME']
 	fail_if_not_exist(OFFLINE_PUB_SIGN_KEY_FNAME, 'offline pub sign key')
 
+	if OFFLINE_PUB_SIGN_KEY_FNAME.find('JUNKTEST')  > 0:
+		print('=================================================================')
+		print('WARNING. You are using the temporary, testing server keys.')
+		print('You may continue for brief testing, but do not go live with these keys.')
+		input('Press ENTER to continue.')
+
+
 	# The crontab check should run as root.
 	CRONTAB_ROOT = cherrypy.config['CRONTAB_ROOT']
 		
@@ -294,7 +306,8 @@ def load_config():
 		+ 'delete old, unread shards when they expire.  You have to ' \
 		+ 'verify the correct path to the python3 program and to the ' \
 		+ 'housekeeping program, but the general format is: ' + os.linesep \
-		+ '* 2 * * * /usr/local/bin/python3 /var/natmsg/ousekeeping_shardsvr.py'
+		+ 'sudo -u natmsg crontabe -e' + os.linesep \
+		+ '* 2 * * * /usr/local/bin/python3 /var/natmsg/housekeeping_shardsvr.py'
 	if not os.path.isfile(os.path.join(CRONTAB_ROOT, 'natmsg')):
 		print(crontab_msg)
 		sys.exit(983)
