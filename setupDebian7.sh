@@ -77,7 +77,7 @@ read -p  "Press ENTER t ocontinue or Ctl-c to quit." junk
 ################################################################################
 #                     CHECK EACH OF THESE OPTIONS
 #
-SOURCE_DIR=$(dirname "$0")
+SOURCE_DIR=$(pwd)
 iface='eth0'
 
 PGUSER_HOME='/var/lib/postgresql'  # on centOS, I use /home/postgres
@@ -118,6 +118,7 @@ echo "ARCHBITS          ${ARCHBITS}"
 echo "PYTHON_VER        ${PYTHON_VER}"
 echo "PSYCOPG_VER       ${PSYCOPG_VER}"
 echo "DSTAMP            ${DSTAMP}"
+echo "initdb command :  sudo -u postgres ${PGSQL_BIN}/pg_ctl -D ${PGSQL_DATA} initdb"
 read -p  "Pres Ctl-c to quit or ENTER to continue" junk
 
 
@@ -164,7 +165,7 @@ apt-get source readline
 apt-get source libpcap
 
 # apt-get install xz-utils
-apt-get source xz-utiles
+apt-get source xz-utils
 
 ################################################################################
 ############################################################
@@ -273,17 +274,19 @@ fi
 
 
 # Install some fake server keys for quick testing.
-if [ ! -s "/var/natmsg/private/TestKeys/JUNKTESTOfflinePUBSignKey.key" ]; then
+if [ ! -f "/var/natmsg/private/TestKeys/JUNKTESTOfflinePUBSignKey.key" ]; then
 	# The sql file is not in the permanent place..
-	if [ -s "${SOURCE_DIR}/private/TestKeys/JUNKTESTOfflinePUBSignKey.key" ]; then
+	tst_file="${SOURCE_DIR}/private/TestKeys/JUNKTESTOfflinePUBSignKey.key"
+	if [ -f "${tst_file}" ]; then
 		# Copy the sql from the untarred github directory
 		echo "Copying SQL from ${SOURCE_DIR}"
 		cp -r "${SOURCE_DIR}/private/TestKeys" /var/natmsg/private
 		chmod 700 /var/natmsg/private
 		chown -R natmsg:natmsg /var/natmsg/private
 	else
-		echo "Error. I can not find the source sql files. They should be in"
-		echo "the sql subdirectory in the github file."
+		echo "Error. I can not find the source test keys. They should be in"
+		echo "the sql subdirectory in the github file (under ${SOURCE_DIR})."
+		echo "Test file was ${tst_file}"
 		exit 493
 	fi
 fi
@@ -483,6 +486,7 @@ if [	"${MENU_CHOICE}" = "y" ]; then
 	echo ""
 	echo ""
 	if [ -d "${PGSQL_DATA}"  ]; then
+		# maybe also check for /var/lib/postgresql/9.1/main/postgresql.conf
 		if [ ! -d "${PGSQL_DATA}/base" ]; then
 			sudo -u postgres "${PGSQL_BIN}/pg_ctl" -D "${PGSQL_DATA}" initdb
 		else
@@ -510,9 +514,10 @@ if [	"${MENU_CHOICE}" = "y" ]; then
 	
 	# start the server prefferably running in 'screen'
 	# declare -i chk_pg
-	chk_pg=$(ps -A|grep postgres|wc -l)
-	if [ ${chk_pg} > 4 ]; then
-		echo "postgreSQL is already running"
+	chk_pg=$(ps -A|grep postgres|wc -l|tr -d ' ')
+	##if [ ${chk_pg} > 4 ]; then
+	if [ "${chk_pg}" != "0" ]; then
+		echo "postgreSQL is already running (${chk_pg})"
 	else
 		echo "Starting the PostgreSQL database now"
 		### Note: postgres on Debian ran upon install with this command 
@@ -1019,9 +1024,29 @@ fi
 echo "checkpoint bbb"
 chown -R postgres:postgres "${PGUSER_HOME}"
 #############################################################
+# Start the database (if it is not running), then
 # Create the database and build the tables.
 
 cd "${PGUSER_HOME}/shardsvr/sql"
+
+# start the server prefferably running in 'screen'
+# declare -i chk_pg
+chk_pg=$(ps -A|grep postgres|wc -l)
+echo "testing chk_pg: ${chk_pg}"
+if [ "${chk_pg}" != "0" ]; then
+	echo "postgreSQL is already running"
+else
+	echo "Starting the PostgreSQL database now"
+	### Note: postgres on Debian ran upon install with this command 
+	###(from ps -Af|less)
+	## "${PGSQL_BIN}/postgres" -D "${PGSQL_DATA}" -c config_file="${PGSQL_CONF}"
+	cd "${PGUSER_HOME}"
+	sudo -u postgres "${PGSQL_BIN}/postgres" -D "${PGSQL_DATA}" &
+	if [ ! $? = 0 ]; then
+		echo "Error.  Could not start the postgreSQL database."
+		exit 87
+	fi
+fi
 
 echo "checkpoint ccc"
 db_existence=$(sudo -u postgres psql  -c '\q' ${DBNAME})
@@ -1085,6 +1110,7 @@ else
 	echo "I am not installing the shard server tables because I already " \
 		"found a shard table."
 fi
+
 ################################################################################
 ################################################################################
 cd /root/noarch
