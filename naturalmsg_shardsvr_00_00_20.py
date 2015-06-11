@@ -1377,7 +1377,9 @@ if __name__ == '__main__':
     # plus this version makes it harder for a generic
     # virus to see the real data.
     SHARD_PW_BYTES = pbkdf2_nm.pw_hash(
-            verify_fname='/var/natmsg/shard_server_receiptV2.save')
+            iterations=97831,
+            verify_fname='/var/natmsg/shard_server_receipt'
+            + NM_VERSION_STRING + '.save')
     if SHARD_PW_BYTES is None:
         print('The shard password is bad.  Quitting now.')
         sys.exit(12)
