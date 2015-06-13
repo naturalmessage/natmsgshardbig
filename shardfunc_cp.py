@@ -354,7 +354,7 @@ def log_err(
         try:
             with open(LOGFILE, 'a') as l_file:
                 print(datetime.datetime.now().strftime("%Y%m%d %H:%M:%S")
-                    + '|' \ + str(rc) + '|' + key + '|' + err_msg, file=l_file)
+                    + '|' + str(rc) + '|' + key + '|' + err_msg, file=l_file)
         except:
             # This message is printed to the console
             print('ERROR. the log file name is not set properly '
