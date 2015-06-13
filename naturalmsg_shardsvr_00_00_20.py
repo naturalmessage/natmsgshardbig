@@ -330,7 +330,7 @@ def load_config():
         + 'delete old, unread shards when they expire.  You have to ' \
         + 'verify the correct path to the python3 program and to the ' \
         + 'housekeeping program, but the general format is: ' + os.linesep \
-        + 'sudo -u natmsg crontabe -e' + os.linesep \
+        + 'sudo -u natmsg crontab -e' + os.linesep \
         + '* 2 * * * /usr/local/bin/python3 ' \
         + '/var/natmsg/housekeeping_shardsvr.py'
     if not os.path.isfile(os.path.join(CRONTAB_ROOT, 'natmsg')):
@@ -804,13 +804,7 @@ class StringGenerator(object):
                     + "  expire_on_date, " \
                     + "  encryption_format, " \
                     + "  day_code) " \
-                    + "values('%s', %s, %s, %d, '%s')" \
-                    + ";" % (
-                        shard_id,
-                        del_dt_sql,
-                        expire_dt_sql,
-                        cherrypy.config['shard_encrypt_version'],
-                        day_code)
+                    + "values('%s', %s, %s, %d, '%s');" % ( shard_id, del_dt_sql, expire_dt_sql, cherrypy.config['shard_encrypt_version'], day_code)
 
                 rc, msg_d = shardfuncs.shard_sql_insert(cur, cmd)
                 if rc != 0:
