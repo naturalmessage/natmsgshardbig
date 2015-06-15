@@ -30,7 +30,7 @@ import datetime
 import json
 import psycopg2
 import re
-import shardfunc_cp
+import shardfunc_cp as shardfuncs
 import subprocess
 import sys
 
@@ -42,6 +42,7 @@ HOSTNAME = ''
 DBNAME = ''
 UNAME = 'shardwebserver'
 PW = ''
+CONN_STR = ''
 MON_FILE_LIST = []
 
 
@@ -306,7 +307,10 @@ def main():
     global HOSTNAME
     global DB_UNAME
     global DB_PW
+    global CONN_STR
     global MON_FILE_LIST
+
+    out = {}
 
     MAIN_CONFIG = configparser.ConfigParser()
     MAIN_CONFIG.read(CONFIG_FNAME)
@@ -315,11 +319,28 @@ def main():
     HOSTNAME = MAIN_CONFIG['global']['HOSTNAME']
     DB_UNAME = MAIN_CONFIG['global']['DB_UNAME']
     DB_PW = MAIN_CONFIG['global']['DB_PW']
-    MON_FILE_LIST = MAIN_CONFIG['global']['MON_FILE_LIST']
+
+    
+    CONN_STR = "host=" + HOSTNAME + " dbname=" + DBNAME + " user=" \
+            + DB_UNAME + " password='" + DB_PW + "'"
+
+    if 'MON_FILE_LIST' in MAIN_CONFIG['global']:
+        MON_FILE_LIST = MAIN_CONFIG['global']['MON_FILE_LIST']
+    else:
+        MON_FILE_LIST= []
 
     if DBNAME == '' or DB_UNAME == '' or DB_PW == '' or HOSTNAME == '':
         print('Error, database connection details are missing.')
         sys.exti(15)
+    # -------------------------------------------------------------------------
+    conn, msg_d = shardfuncs.shard_connect(CONN_STR)
+    if conn is None:
+        print(shardfuncs.safe_string(msg_d))
+        raise RuntimeError(shardfuncs.err_log(110015, 'Failed to '
+            + 'make a database connection in '
+            + 'nm_db_table_names', extra_msg=msg_d))
+    
+    cur = conn.cursor()
     # -------------------------------------------------------------------------
     ps_write_count = 0
     rc, msg_d = ps()
@@ -342,7 +363,7 @@ def main():
                 "'" + str(v['cmd']) + "', '" + str(v['parms']) + "', " + \
                 datestamp_sql + ');'
 
-            rc, msg = shardfunc_cp.shard_sql_insert(cur, cmd)
+            rc, msg = shardfuncs.shard_sql_insert(cur, cmd)
             if rc != 0:
                 out.update({'Error': 'SQL insert command failed.'})
                 out.update({'Error-detail': msg['Error']})
@@ -365,7 +386,7 @@ def main():
     # capture a bunch of record counts and save
     # them to shardsvr.sysmon_rec_counts:
     cmd = 'SELECT shardsvr.sysmon001();'
-    rc, my_data, msg = shardfunc_cp.shard_sql_select(cur, cmd)
+    rc, my_data, msg = shardfuncs.shard_sql_select(cur, cmd)
     if rc != 0:
         out.update({'Error': 'SQL insert command failed.'})
         out.update({'Error-detail': msg['Error']})
@@ -414,7 +435,7 @@ def main():
             + str(v['IO-wait_cpu_ticks']) + ', ' \
             + str(v['boot_time']) + ', ' + datestamp_sql + ');'
 
-        rc, msg = shardfunc_cp.shard_sql_insert(cur, cmd)
+        rc, msg = shardfuncs.shard_sql_insert(cur, cmd)
         if rc != 0:
             out.update({'Error': 'SQL insert command failed.'})
             out.update({'Error-detail': msg['Error']})
@@ -466,7 +487,7 @@ def main():
                         + str(v['mod_time']) + ', ' \
                         + datestamp_sql + ');'
 
-                    rc, msg = shardfunc_cp.shard_sql_insert(cur, cmd)
+                    rc, msg = shardfuncs.shard_sql_insert(cur, cmd)
                     if rc != 0:
                         out.update({'Error': 'SQL insert command failed.'})
                         out.update({'Error-detail': msg['Error']})
@@ -508,7 +529,7 @@ def main():
             + str(v['IpOutRequests']) + ', ' \
             + datestamp_sql + ');'
 
-        rc, msg = shardfunc_cp.shard_sql_insert(cur, cmd)
+        rc, msg = shardfunc.shard_sql_insert(cur, cmd)
         if rc != 0:
             out.update({'Error': 'SQL insert command failed.'})
             out.update({'Error-detail': msg['Error']})
