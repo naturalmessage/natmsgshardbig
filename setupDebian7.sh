@@ -1,4 +1,9 @@
-#!/bin/sh
+#!/bin/bash
+# Note: this scripted uses a few commands that are
+# unique to bash that do not work in other
+# shell scripts.  the /bin/sh command is sometimes
+# pointed to csh or bash or another shell program,
+# so I point to bash specifically.
 ###############################################################################
 # Copyright 2015 Natural Message, LLC.
 # Author: Robert Hoot (naturalmessage@fastmail.fm)
@@ -30,12 +35,12 @@
 # load some utility functions
 . ./natmsg_functions.sh
 
-##get_interfaces(){
-##    # this is for Debian with the 'ip' program
-##    ip_list=$(ip -o address|tr -s ' '|cut -d ' ' -f 2|uniq|grep -v lo)
-##}
 ###############################################################################
-apt-get install screen
+# a few preliminaries:
+apt-get update
+apt-get upgrade
+apt-get install screen curl vim sudo
+###############################################################################
 
 echo "This is a setup for the shard server for Debian 7 (it also does"
 echo "most of the setup for the directory server)."
@@ -144,7 +149,7 @@ cd /root/noarch
 apt-get install vim lynx screen rsync
 apt-get install curl wget # needed for installs
 apt-get install fail2ban
-
+apt-get install zip  # needed to open pyopenssl package 
 # apps needed to install and compile the Natural Message server 
 # verification C programs.
 apt-get install gcc
@@ -333,8 +338,9 @@ if (gshc_confirm "Do you want to install Python3 from source? (y/n): " ); then
     fi
     cd /root/noarch
     if [ -f Python-${PYTHON_VER}.tgz ]; then
-        if (gshc_confirm "The Python 3 source file already exists.  " \
-            "Do you want to DOWNLOAD THAT FILE AGAIN? (y/n): " ); then
+	prmpt = "The Python 3 source file already exists.  " \
+            "Do you want to DOWNLOAD THAT FILE AGAIN? (y/n): "
+        if (gshc_confirm "${prmpt}" ); then
             rm Python-${PYTHON_VER}.tgz
         fi
     fi
@@ -363,8 +369,9 @@ if (gshc_confirm "Do you want to install Python3 from source? (y/n): " ); then
 fi
 
 ###############################################################################
-if (gshc_confirm "Do you want to install Python setuptools " \
-        "(needed to install other stuff)? (y/n): " ); then
+prmpt = "Do you want to install Python setuptools " \
+        "(needed to install other stuff)? (y/n): " 
+if (gshc_confirm "${prmpt}" ); then
     echo "Installing setuptools (ez_setup) from source"
     echo "Because Cent OS 7 does not have an RPM for it"
     if [ ! -d /root/noarch ]; then
@@ -376,35 +383,35 @@ if (gshc_confirm "Do you want to install Python setuptools " \
 fi
 
 ###############################################################################
-# Test if a natural message shard server program is already in the target
-# directory.
-chk_natmsg=$(ls /var/natmsg/naturalmsg_shard*| grep naturalmsg|head -n 1)
-if [ -z "${chk_natmsg}" ]; then
-    PRMPT="You already have at least one version of the natural message " \
-        "shard server program.  Do you want to download and install a " \
-        "fresh version of the the Natural Message shard server Python " \
-        "code? (y/n): " 
-else
-    PRMPT="Do you want to download and install a fresh version " \
-        "of the the Natural Message shard server Python code? (y/n): " 
-fi
-
-    # there are no versions of the shard server, so install it
-if (gshc_confirm "${PRMPT}" ); then
-    echo "Downloading the shard server"
-
-    if [ ! -d /root/noarch ]; then
-        mkdir -p /root/noarch
-    fi
-    cd /root/noarch
-
-    curl -L --url https://github.com/naturalmessage/natmsgshardbig/archive/master.tar.gz > natmsgshardbig.tar.gz
-    gunzip natmsgshardbig.tar.gz
-    tar -xf natmsgshardbig.tar
-    cd natmsgshardbig-master
-    chown natmsg:natmsg *
-    cp * /var/natmsg
-fi
+### ### # Test if a natural message shard server program is already in the target
+### ### # directory.
+### ### chk_natmsg=$(ls /var/natmsg/naturalmsg_shard*| grep naturalmsg|head -n 1)
+### ### if [ -z "${chk_natmsg}" ]; then
+### ###     PRMPT="You already have at least one version of the natural message " \
+### ###         "shard server program.  Do you want to download and install a " \
+### ###         "fresh version of the the Natural Message shard server Python " \
+### ###         "code? (y/n): " 
+### ### else
+### ###     PRMPT="Do you want to download and install a fresh version " \
+### ###         "of the the Natural Message shard server Python code? (y/n): " 
+### ### fi
+### ### 
+### ###     # there are no versions of the shard server, so install it
+### ### if (gshc_confirm "${PRMPT}" ); then
+### ###     echo "Downloading the shard server"
+### ### 
+### ###     if [ ! -d /root/noarch ]; then
+### ###         mkdir -p /root/noarch
+### ###     fi
+### ###     cd /root/noarch
+### ### 
+### ###     curl -L --url https://github.com/naturalmessage/natmsgshardbig/archive/master.tar.gz > natmsgshardbig.tar.gz
+### ###     gunzip natmsgshardbig.tar.gz
+### ###     tar -xf natmsgshardbig.tar
+### ###     cd natmsgshardbig-master
+### ###     chown natmsg:natmsg *
+### ###     cp * /var/natmsg
+### ### fi
 ############################################################
 
 ############################################################
@@ -559,6 +566,7 @@ python3 -c 'import cherrypy'
 if [ $? = 0 ]; then
     echo "Cherrypy is installed"
 else
+    clear
     echo "Cherrypy is not installed.  Installing now."
     # In Debian 8, this will change to python3-cherrypy3
     #
@@ -682,8 +690,9 @@ echo "Shard servers do not rely on the usual SSL certificates that are"
 echo "signed by certificate authorities.  It is expected that shard serers"
 echo "will use self-signed certificates."
 echo
-if (gshc_confirm "Do you want to generate a self-signed SSL certificate? " \
-        "(y/n): " ); then
+prmpt = "Do you want to generate a self-signed SSL certificate? " \
+        "(y/n): " 
+if (gshc_confirm "${prmpt}" ); then
     #
     # test it by running python3 and execute "from OpenSSL import SSL"
     #
@@ -760,7 +769,7 @@ if (gshc_confirm "Do you want to generate a self-signed SSL certificate? " \
     cp -i /root/noarch/keytemp/ca.crt "${CERT_KEY_ROOT}"
     cp -i /root/noarch/keytemp/ca.key "${CERT_KEY_ROOT}"
 
-    chown natmsg:natmsg "${CERT_KEY_ROOT}/*"
+    chown -R natmsg:natmsg "${CERT_KEY_ROOT}"
 fi
 
 # Test real ssl certificates here (no self-signed certs):
@@ -771,9 +780,12 @@ fi
 ## # http://docs.python-requests.org/en/latest/user/install/#get-the-code
 ## # and the downloaded directory looks something like this:
 ## # kennethreitz-requests-359659c
-
-if (gshc_confirm "Do you want to install the python requests " \
-        "library from source? "); then
+echo
+echo
+echo "The ptyhon requests package is needed for the shard server."
+prmpt= "Do you want to install the python requests " \
+        "library from source? "
+if (gshc_confirm "${prmpt}"); then
     cd /root/noarch
     if [ ! -f requests-master.tar.gz ]; then
         curl -L \
@@ -805,8 +817,9 @@ fi
 ### it did not work with elliptic keys
 ## yum install libgcrypt-devel libksba-devel libassuan-devel
 
-if (gshc_confirm "Do you want to compile gpg-error (required before " \
-        "libgcrypt)? " ); then
+prmpt = "Do you want to compile gpg-error (required before " \
+        "libgcrypt)? (y/n): "
+if (gshc_confirm "${prmpt}" ); then
     if [ ! -d /root/c/lib ]; then
         mkdir -p /root/c/lib
     fi
@@ -814,8 +827,9 @@ if (gshc_confirm "Do you want to compile gpg-error (required before " \
     cd /root/c/lib
 
     if [ -f ${LIBGPGERR_VER}.tar.bz2 ]; then
-        if (gshc_confirm "The libgpg-error  source file already exists.  " \
-                "Do you want  to DELETE that version? " ); then
+	prmpt = "The libgpg-error  source file already exists.  " \
+                "Do you want  to DELETE that version? "
+        if (gshc_confirm "${prmpt}"  ); then
             rm ${LIBGPGERR_VER}.tar.bz2
         fi
     fi
@@ -870,8 +884,9 @@ if (gshc_confirm "Do you want to compile libgcrypt? " ); then
 
     cd /root/c/lib
     if [    -f ${LIBGCRYPT_VER}.tar.bz2 ]; then
-        if (gshc_confirm "The libgcrypt source file already exists.  " \
-            "Do you want to DELETE that version? (y/n): " ); then
+	prmpt ="The libgcrypt source file already exists.  " \
+            "Do you want to DELETE that version? (y/n): "
+        if (gshc_confirm "${prmpt}"  ); then
             rm ${LIBGCRYPT_VER}.tar.bz2
         fi
     fi
@@ -1090,9 +1105,10 @@ fi
 
 ###############################################################################
 ###############################################################################
-if (gshc_confirm "Do you want to download and install the natmsgv program " \
+prmpt = "Do you want to download and install the natmsgv program " \
     " to get the key signing routine (required for server " \
-    "operation)? (y/n): "); then
+    "operation)? (y/n): "
+if (gshc_confirm "${prmpt}"); then
     cd /root/noarch
     wget \
         https://github.com/naturalmessage/natmsgv/archive/master.tar.gz \

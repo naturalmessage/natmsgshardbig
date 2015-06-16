@@ -100,8 +100,8 @@ ERR_ERROR="ERROR."
 ERR_CAN_NOT_READ_FILE="ERROR. Can not read file "
 MSG_PRESS_KEY="Press any key to continue (or Ctl-c to quit)..."
 
-M=("ERROR. You must be root to run this script." 
-     "Try running the command prefixed with 'sudo ' (without the quotes).")
+M=("ERROR. You must be root to run this script.  Try running the command prefixed with 'sudo ' (without the quotes).")
+
 ERR_MUST_BE_ROOT="${M[*]}"
 
 ERR_MUST_BE_DOM0="ERROR. This script can run only on a dom0 host."
@@ -2709,7 +2709,7 @@ gshc_config_array_parse(){
 }
 
 
- ----------------------------------------------------------------------
+#----------------------------------------------------------------------
 #------------------------------------------------------------------------
 #------------------------------------------------------------------------
 #------------------------------------------------------------------------
