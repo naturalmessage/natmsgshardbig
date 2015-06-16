@@ -325,7 +325,8 @@ def main():
             + DB_UNAME + " password='" + DB_PW + "'"
 
     if 'MON_FILE_LIST' in MAIN_CONFIG['global']:
-        MON_FILE_LIST = MAIN_CONFIG['global']['MON_FILE_LIST']
+        tmp_list = MAIN_CONFIG['global']['MON_FILE_LIST']
+        MON_FILE_LIST = tmp_list.split(',')
     else:
         MON_FILE_LIST= []
 
@@ -529,7 +530,7 @@ def main():
             + str(v['IpOutRequests']) + ', ' \
             + datestamp_sql + ');'
 
-        rc, msg = shardfunc.shard_sql_insert(cur, cmd)
+        rc, msg = shardfuncs.shard_sql_insert(cur, cmd)
         if rc != 0:
             out.update({'Error': 'SQL insert command failed.'})
             out.update({'Error-detail': msg['Error']})

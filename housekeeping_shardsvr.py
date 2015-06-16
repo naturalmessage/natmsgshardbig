@@ -126,7 +126,7 @@ def shard_sql_select(conn, cur, cmd, binary_output=False):
 
 if __name__ == '__main__':
 
-	CONFIG_FNAME = 'conf/natmsg_shard_prod_00_00_20.conf'
+	CONFIG_FNAME = '/var/natmsg/conf/housekeeping_shardsvr.conf'
 
 	MAIN_CONFIG = configparser.ConfigParser()
 

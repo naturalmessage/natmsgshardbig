@@ -933,9 +933,9 @@ else
     gshc_continue;
 fi
 
-
-#############################################################
+###############################################################################
 #     Configure the postgres user ID.
+#
 # Note that different systems will put the postgres home
 # directory in different places, hence the PGUSER_HOME variable.
 #
@@ -967,7 +967,38 @@ if [ ! -s "${PGUSER_HOME}/shardsvr/sql/0010setup.sql" ]; then
 fi
 
 chown -R postgres:postgres "${PGUSER_HOME}"
-#############################################################
+###############################################################################
+###############################################################################
+#     Configure the sysmon (monitors server stats)
+#
+# Note that different systems will put the postgres home
+# directory in different places, hence the PGUSER_HOME variable.
+#
+
+if grep '^postgres[:]' /etc/passwd; then
+    # The postgres user exists. Create some directories.
+    if [ ! -d "${PGUSER_HOME}/sysmon/sql" ]; then
+        mkdir -p "${PGUSER_HOME}/sysmon/sql"
+    fi
+
+    chown -R postgres:postgres "${PGUSER_HOME}"
+fi
+
+if [ ! -s "${PGUSER_HOME}/sysmon/0510sysmon.sql" ]; then
+    # The sql file is not in the permanent place..
+    if [ -s "${SOURCE_DIR}/sysmon/0510sysmon.sql" ]; then
+        # Copy the sql from the untarred github directory
+        echo "Copying sysmon SQL from ${SOURCE_DIR}"
+        cp  "${SOURCE_DIR}/sysmon/*" "${PGUSER_HOME}/sysmon"
+    else
+        echo "Error. I can not find the source sql files for sysmon. They should be in"
+        echo "the symon subdirectory in the github file."
+        exit 498
+    fi
+fi
+
+chown -R postgres:postgres "${PGUSER_HOME}"
+###############################################################################
 # Start the database (if it is not running), then
 # Create the database and build the tables.
 
@@ -1042,6 +1073,15 @@ if [ -z "${chk_shard}" ]; then
         sudo -u postgres psql -c '\i 0010setup.sql' "${DBNAME}"
         sudo -u postgres psql -c '\i 0015shard_server.sql' "${DBNAME}"
         sudo -u postgres psql -c '\i 0016shard_server_big.sql' "${DBNAME}"
+        sudo -u postgres psql -c '\i functions/scan_shard_delete.sql' "${DBNAME}"
+        sudo -u postgres psql -c '\i functions/shard_burn.sql' "${DBNAME}"
+        sudo -u postgres psql -c '\i functions/shard_delete.sql' "${DBNAME}"
+        sudo -u postgres psql -c '\i functions/shard_expire.sql' "${DBNAME}"
+        sudo -u postgres psql -c '\i functions/sysmon010.sql' "${DBNAME}"
+        sudo -u postgres psql -c '\i functions/shard_burn_big.sql' "${DBNAME}"
+        sudo -u postgres psql -c '\i functions/shard_delete_db_entries.sql' "${DBNAME}"
+        sudo -u postgres psql -c '\i functions/shard_expire_big.sql' "${DBNAME}"
+        sudo -u postgres psql -c '\i functions/shard_id_exists.sql' "${DBNAME}"
     fi
 else
     echo "I am not installing the shard server tables because I already " \
@@ -1054,7 +1094,9 @@ if (gshc_confirm "Do you want to download and install the natmsgv program " \
     " to get the key signing routine (required for server " \
     "operation)? (y/n): "); then
     cd /root/noarch
-    wget https://github.com/naturalmessage/natmsgv/archive/master.tar.gz -O natmsgv.tar.gz
+    wget \
+        https://github.com/naturalmessage/natmsgv/archive/master.tar.gz \
+        -O natmsgv.tar.gz
     gunzip natmsgv.tar.gz
     tar -xf natmsgv.tar
     cd natmsgv-master
@@ -1070,7 +1112,7 @@ fi
 ###############################################################################
 ###############################################################################
 ###############################################################################
-
+###############################################################################
 # gpg agent (for the future mix network)
 if [ ! -f ~/.profile ]; then
 cat >> ~/.profile <<EOF
@@ -1143,7 +1185,7 @@ if [ ! -f /home/natmsg/.screenrc ]; then
     cat /root/.screenrc|sed -e 's/[.]bW/.gW/' > /home/natmsg/.screenrc
     chown natmsg:natmsg /home/natmsg/.screenrc
 fi
-############################################################
+###############################################################################
 rslt=$(crontab -l|grep monitor.py)
     if [    -z "${rslt}" ]; then
     echo "============================================================"
@@ -1159,4 +1201,4 @@ rslt=$(crontab -l|grep monitor.py)
     gshc_continue
     crontab -e
 fi
-############################################################
+###############################################################################
