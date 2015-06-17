@@ -184,9 +184,9 @@ if test_or_prod not in ('test', 'prod', 'exp'):
 
 
 def fail_if_not_exist(
-    """A shortcut to crash if an essential file is not ready during start."""
         fname,
         note='(no description of where the file was used)'):
+    """A shortcut to crash if an essential file is not ready during start."""
     if fname is None:
         print('Error.  Filename is missing for ' + note)
         sys.exit(998)
@@ -1346,7 +1346,7 @@ class StringGenerator(object):
                     f.close()
                     f_in.close()
             except IOError:
-                return({'remix_packet': {'status': 'Error', 'Error': 'Could not write shard'})
+                return({'remix_packet': {'status': 'Error', 'Error': 'Could not write shard'}})
 
         conn, msg_d = shardfuncs.shard_connect(CONN_STR)
         if conn is None:

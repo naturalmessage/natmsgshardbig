@@ -309,9 +309,11 @@ if [ ! -f "/var/natmsg/private/TestKeys/JUNKTESTOfflinePUBSignKey.key" ]; then
 fi
 
 # Copy the main Python programs to /var/natmsg (with no-clobber option)
-cp -n "${SOURCE_DIR}/psql*.sh" /root
-cp -n "${SOURCE_DIR}/*.py" /var/natmsg
-cp -n "${SOURCE_DIR}/conf/*.conf" /var/natmsg/conf
+# Note: do not put the source path in quotes or it will not work
+# due to the wildcard.
+cp -n ${SOURCE_DIR}/psql*.sh /root
+cp -n ${SOURCE_DIR}/*.py /var/natmsg
+cp -n ${SOURCE_DIR}/conf/*.conf /var/natmsg/conf
 chown -R natmsg:natmsg /var/natmsg/conf
 chmod -R 700 /var/natmsg/conf
 chmod -R 700 /var/natmsg/private
@@ -1215,6 +1217,23 @@ rslt=$(crontab -l|grep monitor.py)
     echo "to edit a crontab, then past the example text, and double check"
     echo "the python3 program name and the python script file name."
     echo "*/5 * * * * /usr/local/bin/python3 /var/natmsg/monitor.py"
+    echo "copy the line above with the mouse and prepare to "
+    echo "paste it into crontab..."
+    gshc_continue
+    crontab -e
+fi
+###############################################################################
+###############################################################################
+rslt=$(sudo -u natmsg crontab -l|grep housekeeping)
+    if [    -z "${rslt}" ]; then
+    echo "============================================================"
+    echo "Manual crontab setup:"
+    echo "Create a cron job to run /var/natmsg/housekeeping_shardsvr.py  once per day."
+    echo "under the root user ID.  Use this command:"
+    echo "   sudo -u natmsg crontab -e"
+    echo "to edit a crontab, then past the example text, and double check"
+    echo "the python3 program name and the python script file name."
+    echo "* 2 * * * /usr/local/bin/python3 /var/natmsg/housekeeping_shardsvr.py"
     echo "copy the line above with the mouse and prepare to "
     echo "paste it into crontab..."
     gshc_continue
