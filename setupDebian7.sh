@@ -309,13 +309,20 @@ if [ ! -f "/var/natmsg/private/TestKeys/JUNKTESTOfflinePUBSignKey.key" ]; then
 fi
 
 # Copy the main Python programs to /var/natmsg (with no-clobber option)
+cp -n "${SOURCE_DIR}/psql*.sh" /root
 cp -n "${SOURCE_DIR}/*.py" /var/natmsg
+cp -n "${SOURCE_DIR}/conf/*.conf" /var/natmsg/conf
+chown -R natmsg:natmsg /var/natmsg/conf
+chmod -R 700 /var/natmsg/conf
+chmod -R 700 /var/natmsg/private
 
 # ntpdate will disappear, but it works for now
 apt-get -y install ntpdate
 # sync the time
 ntpdate 2.fedora.pool.ntp.org
 
+chmod  700 /var/natmsg/
+chmod  700 /var/natmsg/*.py
 chown -R natmsg:natmsg /var/natmsg
 # # # # # # # ## # #
 #
@@ -548,9 +555,9 @@ if [    "${MENU_CHOICE}" = "y" ]; then
     
     # for libpq-fe.h, install the devel version of libpqxx
     apt-get -y install libpqxx3-dev
-    gunzip psycopg2-2.5.4.tar.gz
-    tar -xf psycopg2-2.5.4.tar
-    cd psycopg2-2.5.4
+    gunzip psycopg2-${PSYCOPG_VER}.tar.gz
+    tar -xf psycopg2-${PSYCOPG_VER}.tar
+    cd psycopg2-${PSYCOPG_VER}
     # You must run the correct python3 executable.  There might
     # be an old verion in /usr/bin.
     /usr/local/bin/python3 setup.py    install
@@ -651,7 +658,7 @@ apt-get -y install libffi-dev
 PYO_DOWNLOAD="TRUE"
 PYO_INSTALL="TRUE"
 cd /root/noarch
-if [ -f pyopenssl-master/setup.py ]; then
+if [ -f /root/noarch/pyopenssl-master/setup.py ]; then
     # gshc_menu_select will set G_NBR global variable 
     gshc_menu_select "${MENU_PYOPENSSL}"  \
         "You already have the pyopenssl setup file. Select a number:" 3;
@@ -675,7 +682,7 @@ if [ "${PYO_DOWNLOAD}" = "TRUE" ]; then
 fi
 
 if [ "${PYO_INSTALL}" = "TRUE" ]; then
-    if [    -d pyopenssl-master ]; then
+    if [    -d /root/noarch/pyopenssl-master ]; then
         cd pyopenssl-master
     else
         echo "Error. The pyopenssl-master directory does not exist"
@@ -1166,10 +1173,11 @@ set showcmd
 " shiftwidth controls indentation when
 " shiftwidth controls indentation when
 " the user prcesses the > character.
-set shiftwidth=2
+set shiftwidth=4
 
 " tabstop is the width of the tab character.
-set tabstop=2
+set tabstop=4
+set expandtab
 " terminal color for comment.  On some systems,
 " it is set to darkblue which is too dark
 :highlight Comment ctermfg=darkgreen guifg=darkgreen

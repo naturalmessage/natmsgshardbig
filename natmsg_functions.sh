@@ -338,7 +338,12 @@ gshc_confirm(){
 }
 
 gshc_continue(){
-    read -p "${MSG_PRESS_KEY}" junk
+    # Tell the user to press a key to continue and wait
+    # for input.  I printed the prompt in full becasue in some cases
+    # the line is not output until it is complete (during some
+    # redirection options).
+    echo  "${MSG_PRESS_KEY}"
+    read  junk
 }
 
 gshc_pause(){

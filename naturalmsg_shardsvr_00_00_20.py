@@ -441,8 +441,14 @@ def load_config():
     # test if the database is online
     conn, msg_d = shardfuncs.shard_connect(CONN_STR)
     if conn is None:
-        print('Error. Could not connect to the datase.  Is it Running?  '
-            + 'Try running /root/psqlgo.sh for '
+        try:
+            print(msg_d)
+        except Exception:
+            print(repr(msg_d))
+ 
+        print('Error. Could not connect to the database.  Is it Running?  '
+            + 'Check \'ps -A|grep postgres\', or '
+            + 'try running /root/psqlgo.sh for '
             + 'the natural message start script.')
         sys.exit(15)
     else:
