@@ -1,4 +1,6 @@
 #!/bin/bash
+
+
 # Note: this scripted uses a few commands that are
 # unique to bash that do not work in other
 # shell scripts.  the /bin/sh command is sometimes
@@ -39,7 +41,7 @@
 # a few preliminaries:
 apt-get update
 apt-get upgrade
-apt-get install screen curl vim sudo
+apt-get -y install screen curl vim sudo
 ###############################################################################
 
 echo "This is a setup for the shard server for Debian 7 (it also does"
@@ -146,39 +148,39 @@ if [ ! -d /root/noarch ]; then
 fi
 cd /root/noarch
 
-apt-get install vim lynx screen rsync
-apt-get install curl wget # needed for installs
-apt-get install fail2ban
-apt-get install zip  # needed to open pyopenssl package 
+apt-get -y install vim lynx screen rsync
+apt-get -y install curl wget # needed for installs
+apt-get -y install fail2ban
+apt-get -y install zip  # needed to open pyopenssl package 
 # apps needed to install and compile the Natural Message server 
 # verification C programs.
-apt-get install gcc
-apt-get install make
+apt-get -y install gcc
+apt-get -y install make
 echo "bzip2 (bz2) with C headers is needed for the libgcrypt install."
-#apt-get install bzip2-devel
+#apt-get -y install bzip2-devel
 apt-get source bzip2
 #
 #
 # Devel headers needed for pyOpenssl to tet TLS_1_2
-#apt-get install openssl
-apt-get install dpkg-dev
+#apt-get -y install openssl
+apt-get -y install dpkg-dev
 apt-get source openssl
 #
-# apt-get install lib${ARCHBITS}ncurses5-dev
+# apt-get -y install lib${ARCHBITS}ncurses5-dev
 
-apt-get install zlib1g-dev
+apt-get -y install zlib1g-dev
 
 apt-get source lib${ARCHBITS}ncurses5-dev
-# apt-get install sqlite3
+# apt-get -y install sqlite3
 apt-get source sqlite3
 
-#apt-get install readline
+#apt-get -y install readline
 apt-get source readline
 
-#apt-get install libpcap
+#apt-get -y install libpcap
 apt-get source libpcap
 
-# apt-get install xz-utils
+# apt-get -y install xz-utils
 apt-get source xz-utils
 
 ###############################################################################
@@ -295,7 +297,7 @@ if [ ! -f "/var/natmsg/private/TestKeys/JUNKTESTOfflinePUBSignKey.key" ]; then
     if [ -f "${tst_file}" ]; then
         # Copy the sql from the untarred github directory
         echo "Copying SQL from ${SOURCE_DIR}"
-        cp -r "${SOURCE_DIR}/private/TestKeys" /var/natmsg/private
+        cp -rn "${SOURCE_DIR}/private/TestKeys" /var/natmsg/private
         chmod 700 /var/natmsg/private
         chown -R natmsg:natmsg /var/natmsg/private
     else
@@ -306,9 +308,11 @@ if [ ! -f "/var/natmsg/private/TestKeys/JUNKTESTOfflinePUBSignKey.key" ]; then
     fi
 fi
 
+# Copy the main Python programs to /var/natmsg (with no-clobber option)
+cp -n "${SOURCE_DIR}/*.py" /var/natmsg
 
 # ntpdate will disappear, but it works for now
-apt-get install ntpdate
+apt-get -y install ntpdate
 # sync the time
 ntpdate 2.fedora.pool.ntp.org
 
@@ -338,8 +342,7 @@ if (gshc_confirm "Do you want to install Python3 from source? (y/n): " ); then
     fi
     cd /root/noarch
     if [ -f Python-${PYTHON_VER}.tgz ]; then
-	prmpt = "The Python 3 source file already exists.  " \
-            "Do you want to DOWNLOAD THAT FILE AGAIN? (y/n): "
+	prmpt="The Python 3 source file already exists. Do you want to DOWNLOAD THAT FILE AGAIN? (y/n): "
         if (gshc_confirm "${prmpt}" ); then
             rm Python-${PYTHON_VER}.tgz
         fi
@@ -369,8 +372,7 @@ if (gshc_confirm "Do you want to install Python3 from source? (y/n): " ); then
 fi
 
 ###############################################################################
-prmpt = "Do you want to install Python setuptools " \
-        "(needed to install other stuff)? (y/n): " 
+prmpt="Do you want to install Python setuptools (needed to install other stuff)? (y/n): " 
 if (gshc_confirm "${prmpt}" ); then
     echo "Installing setuptools (ez_setup) from source"
     echo "Because Cent OS 7 does not have an RPM for it"
@@ -436,10 +438,10 @@ fi
 if [    "${MENU_CHOICE}" = "y" ]; then
     # Install PostgreSQL
     #
-    apt-get install postgresql-server-dev-all
-    apt-get install postgresql postgresql-client
+    apt-get -y install postgresql-server-dev-all
+    apt-get -y install postgresql postgresql-client
     apt-get source postgresql-server-dev-all
-    apt-get install pgp # for verification of downloaded files.
+    apt-get -y install pgp # for verification of downloaded files.
     
     echo  ""
     echo "When prompted, enter the password for the postgres user ID"
@@ -454,7 +456,7 @@ if [    "${MENU_CHOICE}" = "y" ]; then
     echo "put the SQL stuff for Natural Message there."
     echo ""
     echo "The default data directory for the PostgreSQL database using "
-    echo "the Debian apt-get install is:"
+    echo "the Debian apt-get -y install is:"
     echo "   ${PGSQL_DATA}"
     echo "(Note that on my other setup the 'main' dir is called 'data'.)"
     echo ""
@@ -545,7 +547,7 @@ if [    "${MENU_CHOICE}" = "y" ]; then
     ### gpg --verify psycopg2-2.5.4.tar.gz.asc psycopg2-2.5.4.tar.gz
     
     # for libpq-fe.h, install the devel version of libpqxx
-    apt-get install libpqxx3-dev
+    apt-get -y install libpqxx3-dev
     gunzip psycopg2-2.5.4.tar.gz
     tar -xf psycopg2-2.5.4.tar
     cd psycopg2-2.5.4
@@ -575,7 +577,7 @@ else
     # simplify the install.  This install will be from source.
     #
     # I need the mercurial VCS to get the source
-    apt-get install mercurial 
+    apt-get -y install mercurial 
     ############################################################
     ############################################################
     
@@ -631,7 +633,7 @@ fi
 # correct binaries.
 #
 # install libffi with headers:
-apt-get install libffi-dev
+apt-get -y install libffi-dev
 
 #
 # still needed ? # # The pyopenssl install seemed to mess up the 
@@ -690,8 +692,7 @@ echo "Shard servers do not rely on the usual SSL certificates that are"
 echo "signed by certificate authorities.  It is expected that shard serers"
 echo "will use self-signed certificates."
 echo
-prmpt = "Do you want to generate a self-signed SSL certificate? " \
-        "(y/n): " 
+prmpt="Do you want to generate a self-signed SSL certificate? (y/n): " 
 if (gshc_confirm "${prmpt}" ); then
     #
     # test it by running python3 and execute "from OpenSSL import SSL"
@@ -783,8 +784,7 @@ fi
 echo
 echo
 echo "The ptyhon requests package is needed for the shard server."
-prmpt= "Do you want to install the python requests " \
-        "library from source? "
+prmpt="Do you want to install the python requests library from source? "
 if (gshc_confirm "${prmpt}"); then
     cd /root/noarch
     if [ ! -f requests-master.tar.gz ]; then
@@ -817,8 +817,7 @@ fi
 ### it did not work with elliptic keys
 ## yum install libgcrypt-devel libksba-devel libassuan-devel
 
-prmpt = "Do you want to compile gpg-error (required before " \
-        "libgcrypt)? (y/n): "
+prmpt="Do you want to compile gpg-error (required before libgcrypt)? (y/n): "
 if (gshc_confirm "${prmpt}" ); then
     if [ ! -d /root/c/lib ]; then
         mkdir -p /root/c/lib
@@ -827,8 +826,7 @@ if (gshc_confirm "${prmpt}" ); then
     cd /root/c/lib
 
     if [ -f ${LIBGPGERR_VER}.tar.bz2 ]; then
-	prmpt = "The libgpg-error  source file already exists.  " \
-                "Do you want  to DELETE that version? "
+	prmpt="The libgpg-error  source file already exists.  Do you want  to DELETE that version? "
         if (gshc_confirm "${prmpt}"  ); then
             rm ${LIBGPGERR_VER}.tar.bz2
         fi
@@ -884,8 +882,7 @@ if (gshc_confirm "Do you want to compile libgcrypt? " ); then
 
     cd /root/c/lib
     if [    -f ${LIBGCRYPT_VER}.tar.bz2 ]; then
-	prmpt ="The libgcrypt source file already exists.  " \
-            "Do you want to DELETE that version? (y/n): "
+	prmpt="The libgcrypt source file already exists. Do you want to DELETE that version? (y/n): "
         if (gshc_confirm "${prmpt}"  ); then
             rm ${LIBGCRYPT_VER}.tar.bz2
         fi
@@ -1105,9 +1102,7 @@ fi
 
 ###############################################################################
 ###############################################################################
-prmpt = "Do you want to download and install the natmsgv program " \
-    " to get the key signing routine (required for server " \
-    "operation)? (y/n): "
+prmpt="Do you want to download and install the natmsgv program to get the key signing routine (required for server operation)? (y/n): "
 if (gshc_confirm "${prmpt}"); then
     cd /root/noarch
     wget \
