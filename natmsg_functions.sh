@@ -353,6 +353,22 @@ gshc_pause(){
     return 0
 }
 
+
+
+gshc_drop_ext(){
+    # Given a file name with one or more dots,
+    # display the first part of the filename
+    # without the final extension.
+    # If there is no file extension, display the
+    # original file name.
+    # If the filename is aa.bb.cc.tar.gz
+    # then this will return aa.bb.cc.tar
+    #
+    fname="$1"
+    echo "$fname"|awk -F . '{if (NF == 1) print($0); else {for (i=1; i < NF; i++) {if (i>1) printf("%s", "."); printf("%s", $(i))}}}'
+}
+
+
 gshc_is_root(){
     # Quietly returns 0 if the user is root otherwise nonzero.
     # There might be a need to run different tests based on

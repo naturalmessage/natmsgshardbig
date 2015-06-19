@@ -44,6 +44,8 @@ install_python_tar_gz(){
         return 893
     fi
 
+    echo "+++ Installing tar.gz from ${url}"
+
     if [ ! -d /root/noarch ] ; then
         mkdir -p /root/noarch
     fi
@@ -54,7 +56,7 @@ install_python_tar_gz(){
     good="FALSE"
     if [ "${scheme}" = "http" ]; then
         good="TRUE"
-    elif[ "${scheme}" = "https" ]; then
+    elif [ "${scheme}" = "https" ]; then
         good="TRUE"
     fi
 
@@ -65,7 +67,7 @@ install_python_tar_gz(){
 
     # Prepare for download
     download_fname=$(basename "${url}")
-    tar_fname=$(echo "${download_fname}"|cut -d '.' -f 1-2)
+    tar_fname=$(gshc_drop_ext "${download_fname}")
 
     if [ ! "${tar_fname}.gz" = "${download_fname}" ]; then
         echo "Error. The expected tar file name was did not match the"
@@ -77,7 +79,7 @@ install_python_tar_gz(){
     # Unzip and untar.
     gunzip "${download_fname}"
 
-    proj_dir=$(tar -xf "${tar_fname}"|head -n 1)
+    proj_dir=$(tar -tf "${tar_fname}"|head -n 1)
     tar -xf "${tar_fname}"
 
     if [ ! -d "${proj_dir}" ]; then
@@ -89,6 +91,8 @@ install_python_tar_gz(){
     cd "${proj_dir}"
     if !(/usr/local/bin/python3 setup.py install); then
         echo "Error.  The python setup command failed."
+        echo "The source url was: ${url}."
+	gshc_continue
         return 987
     fi
 
@@ -143,6 +147,8 @@ initial_installs(){
 
     # apt-get -y install xz-utils
     apt-get source xz-utils
+
+    apt-get -y install libffi-dev
 
     return 0
 }
@@ -424,7 +430,7 @@ natmsg_install_python(){
 # needs PSYCOPG_VER
 natmsg_install_postgre(){
     local pgsql_bin_dir="$1"
-    local pgsql_sql_data_dir="$2"
+    local pgsql_data_dir="$2"
     local pguser_home_dir="$3"
     local psycopg_version="$4"
 
@@ -478,6 +484,8 @@ natmsg_install_postgre(){
         echo "   sudo -u postgres ${pgsql_bin_dir}/pg_ctl -D ${pgsql_data_dir} initdb"
         echo ""
         echo ""
+        # The pgsql_data_dir might not exist until after the installs
+        # above have finished.
         if [ -d "${pgsql_data_dir}"  ]; then
             # maybe also check for /var/lib/postgresql/9.1/main/postgresql.conf
             if [ ! -d "${pgsql_data_dir}/base" ]; then
@@ -605,7 +613,10 @@ natmsg_install_cherrypy(){
         hg clone https://bitbucket.org/cherrypy/cherrypy
         cd cherrypy
         # Remember to use the correct version of python in the correct dir.
-        /usr/local/bin/python3 setup.py install
+        if !(/usr/local/bin/python3 setup.py install); then
+            echo "The setup.py command for cherrypy returned an error."
+            return 9587
+	fi
     else
         echo "Skipping CherryPy install."
     fi
@@ -684,7 +695,7 @@ natmsg_install_crypto(){
         gshc_pause
     fi
 
-    if !(install_python_tar_gz https://pypi.python.org/packages/source/c/cryptography/cryptography-${crypotgraphy_version}.tar.gz); then
+    if !(install_python_tar_gz https://pypi.python.org/packages/source/c/cryptography/cryptography-${cryptography_version}.tar.gz); then
         echo "Error.  Failed to download and install cryptography."
         gshc_pause
     fi
@@ -1235,7 +1246,7 @@ initialize_natmsg_database(){
         echo -n "Do you want to initialize the database for "
         if (gshc_confirm "the shard server? (y/n): "); then 
             cd "${pguser_home_dir}/shardsvr/sql"
-            sudo -u postgres psql -c '\i 0010setup.sql' "${dbname}"
+            sudo -u postgres psql -c '\i 0010once.sql' "${dbname}"
             sudo -u postgres psql -c '\i 0015shard_server.sql' "${dbname}"
             sudo -u postgres psql -c '\i 0016shard_server_big.sql' "${dbname}"
             sudo -u postgres psql -c '\i functions/scan_shard_delete.sql' "${dbname}"
@@ -1393,7 +1404,7 @@ EOF
         echo "copy the line above with the mouse and prepare to "
         echo "paste it into crontab..."
         gshc_continue
-        crontab -e
+        sudo -u natmsg crontab -e
     fi
 
     return 0

@@ -56,7 +56,7 @@ echo
 echo "Before continuing, you should probably run this under the 'screen'"
 echo "or 'tmux' screen manager on the remote server so that you can go "
 echo "to the other screen (on the remote server) to run a few commands."
-read -p  "Press ENTER to continue or Ctl-c to quit." junk
+gshc_continue
 echo
 echo "This install script will do several things, including installing "
 echo "an updated version of SSL that can handle elliptic curve cryptography,"
@@ -75,6 +75,9 @@ echo "   sudo apt-get update "
 echo "See https://wiki.debian.org/SourcesList"
 echo ""
 gshc_continue;
+
+
+
 ###############################################################################
 #                     CHECK EACH OF THESE OPTIONS
 #
@@ -89,7 +92,9 @@ echo "Using network interface ${iface}"
 
 
 PGUSER_HOME='/var/lib/postgresql'  # on centOS, I use /home/postgres
-PGSQL_DATA='/var/lib/postgresql/9.1/main' #debian
+# The data directory changes depending on the 
+# OS version and install method
+PGSQL_DATA='/var/lib/postgresql/9.1/main'
 PGSQL_BIN_DIR='/usr/lib/postgresql/9.1/bin'
 PGSQL_CONF='/etc/postgresql/9.1/main/postgresql.conf'
 PYTHON_VER="3.4.3" # for source install only
@@ -150,19 +155,21 @@ gshc_continue;
 
 # NOW RUN THE SCRIPT FUNCTIONS TO INSTALL EVERYTHING
 
-initial_installs;
+if (gshc_confirm "Install basic preliminaries? (y/n): "); then
+	initial_installs;
+fi
 
 natmsg_dir_setup "${SOURCE_DIR}";
 
 natmsg_install_python "${PYTHON_VER}";
 
-natmsg_install_postgre ${PGSQL_BIN_DIR}" ${PGSQL_DATA}" ${PGUSER_HOME}" \
-    ${PSYCOPG_VER}";
+natmsg_install_postgre "${PGSQL_BIN_DIR}" "${PGSQL_DATA}" "${PGUSER_HOME}" \
+    "${PSYCOPG_VER}";
 
 natmsg_install_cherrypy;
 
-natmsg_install_crypto ${six_ver} ${pycparser_ver} ${cffi_ver} \
-    ${pyasn_ver} ${idna_ver} ${cryptography_ver} ${crypto_ver}
+natmsg_install_crypto "${SIX_VER}" "${PYCPARSER_VER}" "${CFFI_VER}" \
+    "${PYASN_VER}" "${IDNA_VER}" "${CRYPTOGRAPHY_VER}" "${CRYPTO_VER}"
 
 install_open_ssl;
 
