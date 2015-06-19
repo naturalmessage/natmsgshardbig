@@ -24,6 +24,7 @@
 
 # This will eventually monitor system resources
 # and send the info to a database.
+# To Do: add lnstat info.  track number of connections.
 
 import configparser
 import datetime

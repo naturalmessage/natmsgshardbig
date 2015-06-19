@@ -364,6 +364,8 @@ gshc_drop_ext(){
     # If the filename is aa.bb.cc.tar.gz
     # then this will return aa.bb.cc.tar
     #
+    # a shell script version can be used if the extension
+    # is known:  ${SQLITE_FILE%%.tar.gz}
     fname="$1"
     echo "$fname"|awk -F . '{if (NF == 1) print($0); else {for (i=1; i < NF; i++) {if (i>1) printf("%s", "."); printf("%s", $(i))}}}'
 }
@@ -468,7 +470,8 @@ gshc_get_os(){
             # The os-release file contains shell variable definitions,
             # so evaluate them with 'eval':
             eval $(cat /etc/os-release)
-            GSHC_OS="${NAME}"
+            # # GSHC_OS="${NAME}"
+            GSHC_OS="Debian"
             GSHC_OS_VER="${VERSION_ID}"
         else
             GSHC_OS="UNKNOWN"
@@ -2189,6 +2192,20 @@ gshc_list_interfaces(){
     else
         # use ifconfig
         ifconfig -s|grep -iv '^iface '|cut -d ' ' -f 1|sort -u
+    fi
+}
+
+gshc_get_ipv4(){
+    # Given an interface name, display IPv4
+    iface="$1"
+    if [ -z "$1" ]; then
+        echo "Error.  There was no interface (network card name) sent to gshc_get_ipv4."
+        return 4857
+    fi
+    if (gshc_is_installed "ip"); then
+        ip address show dev "${iface}"|grep '  inet '|tr -s ' '|cut -d ' ' -f 3
+    else
+        ifconfig "${iface}"|grep '  inet '|tr -s ' '|cut -d ' ' -f 3
     fi
 }
 

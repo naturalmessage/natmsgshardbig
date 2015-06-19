@@ -40,7 +40,7 @@ big_shard_id                CHAR(35)
 --++++++++++++++++++++++++++++++++++++++++++++
 -- without schema privileges, non-superusers can do nothing.
 GRANT USAGE on SCHEMA shardsvr to shardwebserver;
-GRANT CONNECT ON database sharddb  TO shardwebserver;
+GRANT CONNECT ON database shardsvrdb  TO shardwebserver;
 
 -- no access to email_blocked or email_blocked_sources?
 GRANT INSERT ON ALL TABLES IN SCHEMA shardsvr TO shardwebserver;

@@ -108,47 +108,119 @@ initial_installs(){
     # Miscellaneous programs needed for general purposes
     # or preparation for subsequent installs.
     # basics:
+    # 
+    # The sqlite file is optional and for CentOS
+    sqllite_file="$1"
+
     if [ ! -d /root/noarch ]; then
         mkdir -p /root/noarch
     fi
     cd /root/noarch
 
-    apt-get -y install vim lynx screen rsync
-    apt-get -y install curl wget # needed for installs
-    apt-get -y install fail2ban
-    apt-get -y install zip  # needed to open pyopenssl package 
-    # apps needed to install and compile the Natural Message server 
-    # verification C programs.
-    apt-get -y install gcc
-    apt-get -y install make
-    echo "bzip2 (bz2) with C headers is needed for the libgcrypt install."
-    #apt-get -y install bzip2-devel
-    apt-get source bzip2
-    #
-    #
-    # Devel headers needed for pyOpenssl to tet TLS_1_2
-    #apt-get -y install openssl
-    apt-get -y install dpkg-dev
-    apt-get source openssl
-    #
-    # apt-get -y install lib${ARCHBITS}ncurses5-dev
+    if [ "${GSHC_OS}" = "Debian" ]; then
+        echo "Running Debian basic installs..."
+        apt-get -y install vim lynx screen rsync
+        apt-get -y install curl wget # needed for installs
+        apt-get -y install fail2ban
+        apt-get -y install dpkg-dev
+        apt-get -y install zip  # needed to open pyopenssl package 
+        # apps needed to install and compile the Natural Message server 
+        # verification C programs.
+        apt-get -y install gcc
+        apt-get -y install make
+        echo "bzip2 (bz2) with C headers is needed for the libgcrypt install."
+        #apt-get -y install bzip2-devel
+        apt-get source bzip2
+        #
+        #
+        # Devel headers needed for pyOpenssl to tet TLS_1_2
+        #apt-get -y install openssl
+        apt-get -y install dpkg-dev
+        apt-get source openssl
+        #
+        # apt-get -y install lib${ARCHBITS}ncurses5-dev
 
-    apt-get -y install zlib1g-dev
+        apt-get -y install zlib1g-dev
 
-    apt-get source lib${ARCHBITS}ncurses5-dev
-    # apt-get -y install sqlite3
-    apt-get source sqlite3
+        apt-get source lib${ARCHBITS}ncurses5-dev
+        # apt-get -y install sqlite3
+        apt-get source sqlite3
 
-    #apt-get -y install readline
-    apt-get source readline
+        #apt-get -y install readline
+        apt-get source readline
 
-    #apt-get -y install libpcap
-    apt-get source libpcap
+        #apt-get -y install libpcap
+        apt-get source libpcap
 
-    # apt-get -y install xz-utils
-    apt-get source xz-utils
+        # apt-get -y install xz-utils
+        apt-get source xz-utils
 
-    apt-get -y install libffi-dev
+        apt-get -y install libffi-dev
+    else if [ ("${GSHC_OS}" = "CentOS" || "${GSHC_OS}" = "RedHat") && "${GSHC_OS_VER}" = "7" ]; then
+        echo "Running CentOS/RedHat basic installs..."
+
+        yum upgrade
+
+        # Verify that gcc is available to compile python3.
+        yum -y install gcc
+
+        echo "bzip2 (bz2) is needed for the libgcrypt install."
+        yum -y install bzip2-devel
+
+        # While I'm at it, install other devel versions for the sake of python..
+        # (thanks to http://www.linuxtools.co/index.php/Install_Python_3.4_on_CentOS_7)
+        ##yum groupinstall "Development tools"
+        yum install zlib-devel bzip2-devel openssl-devel ncurses-devel sqlite-devel readline-devel libpcap-devel xz-devel
+        # I don't want the graphical tools...
+        # gdbm-devel  db4-devel tk-devel 
+
+        if [ ! -d /root/noarch ]; then
+            mkdir -p /root/noarch
+        fi
+
+        ###
+        ###
+        ### devel headers needed for some python compile
+        yum -y install openssl-devel
+        ###
+        ########################################################################
+        echo ""
+        echo "You now have the option of installing SQLite from source."
+        echo "This is entirely optional, but helped to solve a problem"
+        echo "during an early release of Cent OS 7.  You might have no"
+        echo "need for this. The sqlite yum package was already installed."
+        if (gshc_confirm "Do you want to install SQLite from source? (y/n): " ); then
+            if [ -z "${SQLITE_FILE}" ]; then
+                echo "Error.  The value for SQLITE_FILE is missing."
+                gshc_confirm "Press ENTER to continue or Ctl-c to quit:"
+                return 8456
+            fi
+
+            # Install sqlite source in an attempt to fix a problem
+            # with Python 3 sqlitie module
+            if [ ! -d /root/noarch ]; then
+                mkdir -p /root/noarch
+            fi
+            cd /root/noarch
+            wget https://sqlite.org/2015/${SQLITE_FILE}
+            
+            gunzip ${SQLITE_FILE}
+            ## untar the filename with ".gz"	dropped:
+            tar -xf ${SQLITE_FILE%%.gz}
+            
+            if [ -d ${SQLITE_FILE%%.tar.gz} ]; then
+                cd ${SQLITE_FILE%%.tar.gz}
+            else
+                echo "ERROR, the SQLite directory was not found."
+                exit 129
+            fi
+            
+            ./configure
+            make
+            make install
+        fi
+
+    fi
 
     return 0
 }
@@ -378,7 +450,7 @@ natmsg_install_python(){
     fi
     cd /root/noarch
     wget https://bootstrap.pypa.io/ez_setup.py
-    python3 ez_setup.py
+    /usr/local/bin/python3 ez_setup.py
 
     return 0
 } # end natmsg_install_python
@@ -436,6 +508,9 @@ natmsg_install_postgre(){
 
     local install_p="FALSE"
 
+    # This will set GSHC_OS and GSHC_OS_VER globals:
+    gshc_get_os;
+
     if [ -f "${pgsql_bin_dir}/pg_ctl" ]; then
         echo
         echo
@@ -452,10 +527,19 @@ natmsg_install_postgre(){
     if [ "${install_p}" = "TRUE" ]; then
         # Install PostgreSQL
         #
-        apt-get -y install postgresql-server-dev-all
-        apt-get -y install postgresql postgresql-client
-        apt-get source postgresql-server-dev-all
-        apt-get -y install pgp # for verification of downloaded files.
+        if [ "${GSHC_OS}" = "Debian" ]; then
+            apt-get -y install postgresql-server-dev-all
+            apt-get -y install postgresql postgresql-client
+            apt-get source postgresql-server-dev-all
+            apt-get -y install pgp # for verification of downloaded files.
+            # for libpq-fe.h, install the devel version of libpqxx
+            apt-get -y install libpqxx3-dev
+        fi
+        if [ "${GSHC_OS}" = "CentOS" ||  "${GSHC_OS}" = "RedHat" ]; then
+            # My centos 7 has an install for almost the current postrgre (in late 2014),"
+            # so I will use it."
+            yum -y install postgresql-server postgresql-libs postgresql-contrib postgresql-plpython
+        fi
         
         echo  ""
         echo "When prompted, enter the password for the postgres user ID"
@@ -531,11 +615,13 @@ natmsg_install_postgre(){
         fi
         
         
-        ### echo "This will attempt to edit the config file: ${PGSQL_CONF}"
-        ### echo "file and set the listen addres to the current IP"
-        ### echo "the ifconfig trick will not work on the default CentOS 7"
-        MY_IP=$(ifconfig ${iface}|grep "inet add"|grep -v 127[.]0[.]0[.]1|tr \
-            -s ' '|cut -d ' ' -f 3|cut -d ':' -f 2)
+        # This will attempt to edit the config file: ${PGSQL_CONF}
+        # file and set the listen addres to the current IP
+        # the ifconfig trick will not work on the default CentOS 7.
+        #MY_IP=$(ifconfig ${iface}|grep "inet add"|grep -v 127[.]0[.]0[.]1|tr \
+        #    -s ' '|cut -d ' ' -f 3|cut -d ':' -f 2)
+        MY_IP=$(gshc_get_ipv4)
+        echo "++++ I found my IP to be ${MY_IP} (I do not want 127.0.0.1 here)."
         
         ############################################################
         # Install psycopg2 for python3 (postgres interface for python)
@@ -562,8 +648,6 @@ natmsg_install_postgre(){
         ### # PGP but I don't have the pubic key
         ### gpg --verify psycopg2-2.5.4.tar.gz.asc psycopg2-2.5.4.tar.gz
         
-        # for libpq-fe.h, install the devel version of libpqxx
-        apt-get -y install libpqxx3-dev
         gunzip psycopg2-${psycopg_version}.tar.gz
         tar -xf psycopg2-${psycopg_version}.tar
         cd psycopg2-${psycopg_version}
@@ -584,7 +668,7 @@ natmsg_install_postgre(){
 natmsg_install_cherrypy(){
     local install_cp="FALSE"
 
-    python3 -c 'import cherrypy'
+    /usr/local/bin/python3 -c 'import cherrypy'
     if [ $? = 0 ]; then
         echo "Cherrypy (web server/Python module) was already installed"
         if (gshc_confirm "Do you want to reinstall CherryPy? (y/n): "); then
@@ -616,7 +700,7 @@ natmsg_install_cherrypy(){
         if !(/usr/local/bin/python3 setup.py install); then
             echo "The setup.py command for cherrypy returned an error."
             return 9587
-	fi
+	    fi
     else
         echo "Skipping CherryPy install."
     fi
@@ -700,9 +784,7 @@ natmsg_install_crypto(){
         gshc_pause
     fi
 
-
-
-    python3 -c 'import Crypto'
+    /usr/local/bin/python3 -c 'import Crypto'
 
     if [ $? = 0 ]; then
         echo "The python Crypto library is already installed."
@@ -741,9 +823,34 @@ install_open_ssl(){
     # install the openssl source so that the system has the right program,
     # then after that is installed, comiling pyopenssl here will get the
     # correct binaries.
-    #
-    # install libffi with headers:
-    apt-get -y install libffi-dev
+
+    # This will set GSHC_OS and GSHC_OS_VER globals:
+    gshc_get_os;
+
+    
+    if [ "${GSHC_OS}" = "Debian" ]; then
+        # install libffi with headers:
+        apt-get -y install libffi-dev
+    else if [ ("${GSHC_OS}" = "CentOS" || "${GSHC_OS}" = "RedHat") && "${GSHC_OS_VER}" = "7" ]; then
+        echo "Running CentOS/RedHat CherryPy install..."
+        #	CherryPy
+        # There is a cherrypy and cherrypy2 install via EPEL for CentOS 7,
+        # but I need cherrypy3.
+        yum -y install hg 
+        yum -y install libffi-devel
+
+        # # # # I am havinga problem with _sqlite3 python being missing
+        # # # # If sqlite is missing, choose the 'install from source' option
+        # # # # in this script.
+        # # # #yum -y install sqlite3-dbf
+        # # # cd /usr/local/lib/python3.4/lib-dynload
+        # # # ln /usr/lib64/python2.7/lib-dynload/_sqlite3.so /usr/local/lib/python3.4/lib-dynload/_sqlite3.so
+        mkdir -p /root/noarch/CherryPySource
+        cd /root/noarch/CherryPySource
+        hg clone https://bitbucket.org/cherrypy/cherrypy
+        cd cherrypy
+        /usr/local/bin/python3 setup.py install
+    fi
 
     #
     # still needed ? # # The pyopenssl install seemed to mess up the 
@@ -1374,39 +1481,57 @@ EOF
         chown natmsg:natmsg /home/natmsg/.screenrc
     fi
     ###############################################################################
-    rslt=$(crontab -l|grep monitor.py)
-        if [    -z "${rslt}" ]; then
-        echo "============================================================"
-        echo "Manual crontab setup:"
-        echo "Create a cron job to run /var/natmsg/monitor.py every 5 min"
-        echo "under the root user ID.  Use this command:"
-        echo "   sudo crontab -e"
-        echo "to edit a crontab, then past the example text, and double check"
-        echo "the python3 program name and the python script file name."
+    clear
+    echo "READ THIS!!"
+    echo "The last step is to edit two different crontabs to schedule sever-related"
+    echo "tasks.  If you are running under tee or otherwise redirecting output,"
+    echo "the next step will fail, so skip it."
+    if (gshc_confirm "Edit crontab now: (y/n): "); then
+        rslt=$(crontab -l|grep monitor.py)
+            if [    -z "${rslt}" ]; then
+            echo "============================================================"
+            echo "Manual crontab setup:"
+            echo "Create a cron job to run /var/natmsg/monitor.py every 5 min"
+            echo "under the root user ID.  Use this command:"
+            echo "   sudo crontab -e"
+            echo "to edit a crontab, then past the example text, and double check"
+            echo "the python3 program name and the python script file name."
+            echo "*/5 * * * * /usr/local/bin/python3 /var/natmsg/monitor.py"
+            echo "copy the line above with the mouse and prepare to "
+            echo "paste it into crontab..."
+            gshc_continue
+            crontab -e
+        fi
+        ###############################################################################
+        ###############################################################################
+        rslt=$(sudo -u natmsg crontab -l|grep housekeeping)
+            if [    -z "${rslt}" ]; then
+            echo "============================================================"
+            echo "Manual crontab setup:"
+            echo "Create a cron job to run /var/natmsg/housekeeping_shardsvr.py  once per day."
+            echo "under the root user ID.  Use this command:"
+            echo "   sudo -u natmsg crontab -e"
+            echo "to edit a crontab, then past the example text, and double check"
+            echo "the python3 program name and the python script file name."
+            echo "* 2 * * * /usr/local/bin/python3 /var/natmsg/housekeeping_shardsvr.py"
+            echo "copy the line above with the mouse and prepare to "
+            echo "paste it into crontab..."
+            gshc_continue
+            sudo -u natmsg crontab -e
+        fi
+    else
+        echo "You can manually run two crontab commands: one for root and one for the"
+        echo "natmsg user ID."
+        echo "For the root user ID, run crontab -e and enter this:"
         echo "*/5 * * * * /usr/local/bin/python3 /var/natmsg/monitor.py"
-        echo "copy the line above with the mouse and prepare to "
-        echo "paste it into crontab..."
-        gshc_continue
-        crontab -e
-    fi
-    ###############################################################################
-    ###############################################################################
-    rslt=$(sudo -u natmsg crontab -l|grep housekeeping)
-        if [    -z "${rslt}" ]; then
-        echo "============================================================"
-        echo "Manual crontab setup:"
-        echo "Create a cron job to run /var/natmsg/housekeeping_shardsvr.py  once per day."
-        echo "under the root user ID.  Use this command:"
+        echo ""
+        echo "Then run this command and enter the string below it:"
         echo "   sudo -u natmsg crontab -e"
-        echo "to edit a crontab, then past the example text, and double check"
-        echo "the python3 program name and the python script file name."
         echo "* 2 * * * /usr/local/bin/python3 /var/natmsg/housekeeping_shardsvr.py"
-        echo "copy the line above with the mouse and prepare to "
-        echo "paste it into crontab..."
-        gshc_continue
-        sudo -u natmsg crontab -e
     fi
 
+    echo "ALSO: run visudo and create a line like this:"
+    echo "natmsg  ALL=(ALL)   ALL"
     return 0
 }
 ###############################################################################
