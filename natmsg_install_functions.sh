@@ -109,68 +109,94 @@ initial_installs(){
     # or preparation for subsequent installs.
     # basics:
     # 
-    # The sqlite file is optional and for CentOS
-    sqllite_file="$1"
 
+    # The sqlite file is optional and for CentOS
+    local log_file_name="$1"
+    local sqllite_file="$2"
+
+    if [ -z "${log_file_name}" ]; then
+        echo "Error. The log file name in initial_installs is missing."
+        echo "setting to natmsg.log"
+        log_file_name='natmsg.log'
+        gshc_continue
+    fi
+
+    echo "** Starting initial_installs"  >> "${log_file_name}"
     if [ ! -d /root/noarch ]; then
         mkdir -p /root/noarch
     fi
     cd /root/noarch
 
+    # This will set GSHC_OS and GSHC_OS_VER globals:
+    gshc_get_os;
+
     if [ "${GSHC_OS}" = "Debian" ]; then
         echo "Running Debian basic installs..."
-        apt-get -y install vim lynx screen rsync
-        apt-get -y install curl wget # needed for installs
-        apt-get -y install fail2ban
-        apt-get -y install dpkg-dev
+        echo "updating and upgrading the OS"
+        apt-get update >> "${log_file_name}"
+        apt-get upgrade  >> "${log_file_name}"
+        echo "installing screen, curl, vim, sudo"
+        apt-get -y install screen curl vim sudo  >> "${log_file_name}"
+
+        apt-get -y install vim lynx screen rsync >> "${log_file_name}"
+        apt-get -y install curl wget  >> "${log_file_name}"
+        apt-get -y install fail2ban >> "${log_file_name}"
+        apt-get -y install dpkg-dev >> "${log_file_name}"
         apt-get -y install zip  # needed to open pyopenssl package 
         # apps needed to install and compile the Natural Message server 
         # verification C programs.
-        apt-get -y install gcc
-        apt-get -y install make
+        apt-get -y install gcc >> "${log_file_name}"
+        apt-get -y install make >> "${log_file_name}"
         echo "bzip2 (bz2) with C headers is needed for the libgcrypt install."
         #apt-get -y install bzip2-devel
-        apt-get source bzip2
+        apt-get source bzip2 >> "${log_file_name}"
         #
         #
         # Devel headers needed for pyOpenssl to tet TLS_1_2
         #apt-get -y install openssl
-        apt-get -y install dpkg-dev
-        apt-get source openssl
+        apt-get -y install dpkg-dev >> "${log_file_name}"
+        apt-get source openssl >> "${log_file_name}"
         #
         # apt-get -y install lib${ARCHBITS}ncurses5-dev
 
-        apt-get -y install zlib1g-dev
+        # Not sure which library is needed for the zlib
+        # module in python.  I have to compile Python
+        # with the proper libraries or it won't open .zip files.
+        # run this to find headr files in packages..., it shows zlib.h:
+        # dpkg -L zlib1g-dev
+        apt-get -y install zlib1g-dev >> "${log_file_name}"
+        apt-get -y install zlibc >> "${log_file_name}"
 
-        apt-get source lib${ARCHBITS}ncurses5-dev
+        apt-get source lib${ARCHBITS}ncurses5-dev >> "${log_file_name}"
         # apt-get -y install sqlite3
-        apt-get source sqlite3
+        apt-get source sqlite3 >> "${log_file_name}"
 
         #apt-get -y install readline
-        apt-get source readline
+        apt-get source readline >> "${log_file_name}"
 
         #apt-get -y install libpcap
-        apt-get source libpcap
+        apt-get source libpcap >> "${log_file_name}"
 
         # apt-get -y install xz-utils
-        apt-get source xz-utils
+        apt-get source xz-utils >> "${log_file_name}"
 
-        apt-get -y install libffi-dev
+        apt-get -y install libffi-dev >> "${log_file_name}"
     else if [ ("${GSHC_OS}" = "CentOS" || "${GSHC_OS}" = "RedHat") && "${GSHC_OS_VER}" = "7" ]; then
         echo "Running CentOS/RedHat basic installs..."
 
-        yum upgrade
+        yum upgrade >> "${log_file_name}"
 
         # Verify that gcc is available to compile python3.
-        yum -y install gcc
+        yum -y install gcc >> "${log_file_name}"
 
         echo "bzip2 (bz2) is needed for the libgcrypt install."
-        yum -y install bzip2-devel
+        yum -y install bzip2-devel >> "${log_file_name}"
 
         # While I'm at it, install other devel versions for the sake of python..
         # (thanks to http://www.linuxtools.co/index.php/Install_Python_3.4_on_CentOS_7)
         ##yum groupinstall "Development tools"
-        yum install zlib-devel bzip2-devel openssl-devel ncurses-devel sqlite-devel readline-devel libpcap-devel xz-devel
+        yum install zlib-devel bzip2-devel openssl-devel ncurses-devel sqlite-devel \
+            readline-devel libpcap-devel xz-devel >> "${log_file_name}"
         # I don't want the graphical tools...
         # gdbm-devel  db4-devel tk-devel 
 
@@ -181,7 +207,7 @@ initial_installs(){
         ###
         ###
         ### devel headers needed for some python compile
-        yum -y install openssl-devel
+        yum -y install openssl-devel >> "${log_file_name}"
         ###
         ########################################################################
         echo ""
@@ -202,11 +228,11 @@ initial_installs(){
                 mkdir -p /root/noarch
             fi
             cd /root/noarch
-            wget https://sqlite.org/2015/${SQLITE_FILE}
+            wget https://sqlite.org/2015/${SQLITE_FILE}  >> "${log_file_name}"
             
-            gunzip ${SQLITE_FILE}
+            gunzip ${SQLITE_FILE} >> "${log_file_name}"
             ## untar the filename with ".gz"	dropped:
-            tar -xf ${SQLITE_FILE%%.gz}
+            tar -xf ${SQLITE_FILE%%.gz} >> "${log_file_name}"
             
             if [ -d ${SQLITE_FILE%%.tar.gz} ]; then
                 cd ${SQLITE_FILE%%.tar.gz}
@@ -215,9 +241,9 @@ initial_installs(){
                 exit 129
             fi
             
-            ./configure
-            make
-            make install
+            ./configure >> "${log_file_name}"
+            make >> "${log_file_name}"
+            make install >> "${log_file_name}"
         fi
 
     fi
@@ -236,11 +262,22 @@ natmsg_dir_setup(){
     fi
 
     local source_directory="$1"
+    local log_flie_name="$2"
 
     if [ ! -d "${source_directory}" ]; then
         echo "Error. The source directory for natmsg_dir_setup does not exist."
         exit 346
     fi
+
+    if [ -z "${log_file_name}" ]; then
+        echo "Error. The log file name in natmsg_dir_setup is missing."
+        echo "setting to natmsg.log"
+        log_file_name='natmsg.log'
+        gshc_continue
+    fi
+
+    echo "** Starting natmgs_dir_setup" >> "${log_file_name}"
+
 
     natmsg_tst=$(cat /etc/passwd|grep '^natmsg[:]')
     if [ -z "${natmsg_tst}" ]; then
@@ -268,82 +305,82 @@ natmsg_dir_setup(){
 
     if [ ! -d /home/natmsg ]; then
         mkdir /home/natmsg
-        chown natmsg:natmsg /home/natmsg
+        chown natmsg:natmsg /home/natmsg >> "${log_file_name}"
     fi
 
     if [ ! -f /home/natmsg/.profile ]; then
-        cp /root/.profile /home/natmsg/.profile
-        chown natmsg:natmsg /home/natmsg/.profile
+        cp /root/.profile /home/natmsg/.profile >> "${log_file_name}"
+        chown natmsg:natmsg /home/natmsg/.profile >> "${log_file_name}"
     fi
 
     if [ ! -d /var/natmsg ]; then
         mkdir /var/natmsg
     fi
-    chown natmsg:natmsg /var/natmsg
-    chmod 755 /var/natmsg
+    chown natmsg:natmsg /var/natmsg >> "${log_file_name}"
+    chmod 755 /var/natmsg >> "${log_file_name}"
 
     if [ ! -d /var/natmsg/private ]; then
-        mkdir /var/natmsg/private
+        mkdir /var/natmsg/private >> "${log_file_name}"
     fi
-    chown natmsg:natmsg /var/natmsg/private
-    chmod 700 /var/natmsg/private
+    chown natmsg:natmsg /var/natmsg/private >> "${log_file_name}"
+    chmod 700 /var/natmsg/private >> "${log_file_name}"
 
     if [ ! -d /var/natmsg/private/TestKeys ]; then
-        mkdir /var/natmsg/private/TestKeys
+        mkdir /var/natmsg/private/TestKeys >> "${log_file_name}"
     fi
-    chown natmsg:natmsg /var/natmsg/private/TestKeys
-    chmod 700 /var/natmsg/private/TestKeys
+    chown natmsg:natmsg /var/natmsg/private/TestKeys >> "${log_file_name}"
+    chmod 700 /var/natmsg/private/TestKeys >> "${log_file_name}"
 
 
     if [ ! -d /var/natmsg/shards ]; then
-        mkdir /var/natmsg/shards
+        mkdir /var/natmsg/shards >> "${log_file_name}"
     fi
-    chown natmsg:natmsg /var/natmsg/shards
-    chmod 700 /var/natmsg/shards
+    chown natmsg:natmsg /var/natmsg/shards >> "${log_file_name}"
+    chmod 700 /var/natmsg/shards >> "${log_file_name}"
 
     if [ ! -d /var/natmsg/html ]; then
-        mkdir /var/natmsg/html
+        mkdir /var/natmsg/html >> "${log_file_name}"
     fi
-    chown natmsg:natmsg /var/natmsg/html
-    chmod 500 /var/natmsg/html
+    chown natmsg:natmsg /var/natmsg/html >> "${log_file_name}"
+    chmod 500 /var/natmsg/html >> "${log_file_name}"
 
     if [ ! -d /var/natmsg/html/img ]; then
-        mkdir /var/natmsg/html/img
+        mkdir /var/natmsg/html/img >> "${log_file_name}"
     fi
-    chown natmsg:natmsg /var/natmsg/html
-    chmod 500 /var/natmsg/html
+    chown natmsg:natmsg /var/natmsg/html >> "${log_file_name}"
+    chmod 500 /var/natmsg/html >> "${log_file_name}"
 
     if [ ! -d /var/natmsg/conf ]; then
-        mkdir /var/natmsg/conf
+        mkdir /var/natmsg/conf >> "${log_file_name}"
     fi
-    chown natmsg:natmsg /var/natmsg/conf
-    chmod 700 /var/natmsg/conf
+    chown natmsg:natmsg /var/natmsg/conf >> "${log_file_name}"
+    chmod 700 /var/natmsg/conf >> "${log_file_name}"
 
     if [ ! -d /var/natmsg/webmaster ]; then
-        mkdir /var/natmsg/webmaster
+        mkdir /var/natmsg/webmaster >> "${log_file_name}"
     fi
-    chown natmsg:natmsg /var/natmsg/webmaster
-    chmod 700 /var/natmsg/webmaster
+    chown natmsg:natmsg /var/natmsg/webmaster >> "${log_file_name}"
+    chmod 700 /var/natmsg/webmaster >> "${log_file_name}"
 
     if [ ! -d /var/natmsg/.gnupg ]; then
-        mkdir /var/natmsg/.gnupg
+        mkdir /var/natmsg/.gnupg >> "${log_file_name}"
     fi
-    chown natmsg:natmsg /var/natmsg/.gnupg
-    chmod 700 /var/natmsg/.gnupg
+    chown natmsg:natmsg /var/natmsg/.gnupg >> "${log_file_name}"
+    chmod 700 /var/natmsg/.gnupg >> "${log_file_name}"
 
 
     if [ ! -d /var/natmsg/shards/a ]; then
         # Shards for each day of the week go on a different
         # subdirectory
-        mkdir -p /var/natmsg/shards/a
-        mkdir -p /var/natmsg/shards/b
-        mkdir -p /var/natmsg/shards/c
-        mkdir -p /var/natmsg/shards/d
-        mkdir -p /var/natmsg/shards/e
-        mkdir -p /var/natmsg/shards/f
-        mkdir -p /var/natmsg/shards/g
-        chown -R natmsg:natmsg /var/natmsg/shards
-        chmod -R 700 /var/natmsg/shards/
+        mkdir -p /var/natmsg/shards/a  >> "${log_file_name}"
+        mkdir -p /var/natmsg/shards/b  >> "${log_file_name}"
+        mkdir -p /var/natmsg/shards/c  >> "${log_file_name}"
+        mkdir -p /var/natmsg/shards/d  >> "${log_file_name}"
+        mkdir -p /var/natmsg/shards/e  >> "${log_file_name}"
+        mkdir -p /var/natmsg/shards/f  >> "${log_file_name}"
+        mkdir -p /var/natmsg/shards/g  >> "${log_file_name}"
+        chown -R natmsg:natmsg /var/natmsg/shards  >> "${log_file_name}"
+        chmod -R 700 /var/natmsg/shards/  >> "${log_file_name}"
     fi
 
     # Install some fake server keys for quick testing.
@@ -353,13 +390,13 @@ natmsg_dir_setup(){
         if [ -f "${tst_file}" ]; then
             # Copy the sql from the untarred github directory
             echo "Copying SQL from ${source_directory}"
-            cp -rn "${source_directory}/private/TestKeys" /var/natmsg/private
-            chmod 700 /var/natmsg/private
-            chown -R natmsg:natmsg /var/natmsg/private
+            cp -rn "${source_directory}/private/TestKeys" /var/natmsg/private  >> "${log_file_name}"
+            chmod 700 /var/natmsg/private  >> "${log_file_name}"
+            chown -R natmsg:natmsg /var/natmsg/private  >> "${log_file_name}"
         else
-            echo "Error. I can not find the source test keys. They should be in"
-            echo "the sql subdirectory in the github file (under ${source_directory})."
-            echo "Test file was ${tst_file}"
+            echo "Error. I can not find the source test keys. They should be in"  |tee "${log_file_name}"
+            echo "the sql subdirectory in the github file (under ${source_directory})."  |tee "${log_file_name}"
+            echo "Test file was ${tst_file}"  |tee "${log_file_name}"
             exit 493
         fi
     fi
@@ -367,34 +404,26 @@ natmsg_dir_setup(){
     # Copy the main Python programs to /var/natmsg (with no-clobber option)
     # Note: do not put the source path in quotes or it will not work
     # due to the wildcard.
-    cp -n ${source_directory}/psql*.sh /root
-    cp -n ${source_directory}/*.py /var/natmsg
-    cp -n ${source_directory}/conf/*.conf /var/natmsg/conf
-    chown -R natmsg:natmsg /var/natmsg/conf
-    chmod -R 700 /var/natmsg/conf
-    chmod -R 700 /var/natmsg/private
+    cp -n ${source_directory}/psql*.sh /root  >> "${log_file_name}"
+    cp -n ${source_directory}/*.py /var/natmsg  >> "${log_file_name}"
+    cp -n ${source_directory}/conf/*.conf /var/natmsg/conf  >> "${log_file_name}"
+    chown -R natmsg:natmsg /var/natmsg/conf  >> "${log_file_name}"
+    chmod -R 700 /var/natmsg/conf  >> "${log_file_name}"
+    chmod -R 700 /var/natmsg/private  >> "${log_file_name}"
 
     # ntpdate will disappear, but it works for now
-    apt-get -y install ntpdate
+    apt-get -y install ntpdate  >> "${log_file_name}"
     # sync the time
-    ntpdate 2.fedora.pool.ntp.org
+    ntpdate 2.fedora.pool.ntp.org  >> "${log_file_name}"
 
-    chmod  700 /var/natmsg/
-    chmod  700 /var/natmsg/*.py
-    chown -R natmsg:natmsg /var/natmsg
+    chmod  700 /var/natmsg/  >> "${log_file_name}"
+    chmod  700 /var/natmsg/*.py  >> "${log_file_name}"
+    chown -R natmsg:natmsg /var/natmsg  >> "${log_file_name}"
     # # # # # # # ## # #
     #
     # mail setup
     touch    /var/mail/natmsg
-    chown natmsg:natmsg /var/mail/natmsg 
-
-    if [ -z "${natmsg_tst}" ]; then
-        echo "You will need to add the natmsg user ID to the sudoers list."
-        echo "Run the visduo command from the root ID and replicate the"
-        echo "    'root  ALL=(ALL:ALL) ALL' "
-        echo "line and change root to natmsg."
-        gshc_continue;
-    fi
+    chown natmsg:natmsg /var/mail/natmsg  >> "${log_file_name}"
 
     return 0
 } # end natmsg_dir_setup
@@ -407,7 +436,18 @@ natmsg_dir_setup(){
 # the builtin _ssl lib did not have TLS_1_2.
 # needs PYTHON_VER
 natmsg_install_python(){
-    python_version="$1"
+    local python_version="$1"
+    local log_file_name="$2"
+
+    if [ -z "${log_file_name}" ]; then
+        echo "Error. The log file name in natmsg_install_python is missing."
+        echo "setting to natmsg.log"
+        log_file_name='natmsg.log'
+        gshc_continue
+    fi
+
+    echo "** Installing Python 3 from source to /usr/local/bin" |tee  "${log_file_name}"
+
     if (gshc_confirm "Do you want to install Python3 from source? (y/n): " ); then
         if [ ! -d /root/noarch ]; then
             mkdir -p /root/noarch
@@ -416,14 +456,14 @@ natmsg_install_python(){
         if [ -f Python-${python_version}.tgz ]; then
         prmpt="The Python 3 source file already exists. Do you want to DOWNLOAD THAT FILE AGAIN? (y/n): "
             if (gshc_confirm "${prmpt}" ); then
-                rm Python-${python_version}.tgz
+                rm Python-${python_version}.tgz >> "${log_file_name}"
             fi
         fi
 
         if [ ! -f Python-${python_version}.tgz ]; then
             # The Python file is not already here, so download it...
-            wget https://www.python.org/ftp/python/${python_version}/Python-${python_version}.tgz
-            tar xf Python-${python_version}.tgz
+            wget https://www.python.org/ftp/python/${python_version}/Python-${python_version}.tgz >> "${log_file_name}"
+            tar -xf Python-${python_version}.tgz >> "${log_file_name}"
         fi
 
         if [ -d Python-${python_version} ]; then
@@ -433,9 +473,9 @@ natmsg_install_python(){
             exit 123
         fi
         
-        ./configure --prefix=/usr/local --enable-shared
-        make
-        make install
+        ./configure --prefix=/usr/local --enable-shared |tee "${log_file_name}"
+        make |tee "${log_file_name}"
+        make install |tee "${log_file_name}"
         # A python3 library is not in the default path,
         # so add it like this:
         # The ld.so.conf.d trick works on Centos 7, not sure about Debian 7.
@@ -449,8 +489,16 @@ natmsg_install_python(){
       mkdir -p /root/noarch
     fi
     cd /root/noarch
-    wget https://bootstrap.pypa.io/ez_setup.py
-    /usr/local/bin/python3 ez_setup.py
+    wget https://bootstrap.pypa.io/ez_setup.py |tee "${log_file_name}"
+    
+    if !(/usr/local/bin/python3 ez_setup.py >> "${log_file_name}"); then
+        echo "Error.  Failed to install setuptools (ez_setup)."
+        echo "This will adversely impact other installations."
+        echo "It could be that ez_setup needs something installed"
+        echo "or compiled-into Python (in the past, it needed zlib)."
+        gshc_continue
+        exit 56
+    fi
 
     return 0
 } # end natmsg_install_python
@@ -505,8 +553,19 @@ natmsg_install_postgre(){
     local pgsql_data_dir="$2"
     local pguser_home_dir="$3"
     local psycopg_version="$4"
+    local log_file_name="$5"
 
     local install_p="FALSE"
+
+    if [ -z "${log_file_name}" ]; then
+        echo "Error. The log file name in natmsg_install_postgre is missing."
+        echo "setting to natmsg.log"
+        log_file_name='natmsg.log'
+        gshc_continue
+    fi
+
+    echo "** Installing PostgreSQL from source" |tee  "${log_file_name}"
+
 
     # This will set GSHC_OS and GSHC_OS_VER globals:
     gshc_get_os;
@@ -528,17 +587,19 @@ natmsg_install_postgre(){
         # Install PostgreSQL
         #
         if [ "${GSHC_OS}" = "Debian" ]; then
-            apt-get -y install postgresql-server-dev-all
-            apt-get -y install postgresql postgresql-client
-            apt-get source postgresql-server-dev-all
-            apt-get -y install pgp # for verification of downloaded files.
+            apt-get -y install postgresql-server-dev-all  >> "${log_file_name}"
+            apt-get -y install postgresql postgresql-client  >> "${log_file_name}"
+            apt-get source postgresql-server-dev-all  >> "${log_file_name}"
+            # gpg to verify file sigs 
+            apt-get -y install gpg  >> "${log_file_name}"
             # for libpq-fe.h, install the devel version of libpqxx
-            apt-get -y install libpqxx3-dev
+            apt-get -y install libpqxx3-dev  >> "${log_file_name}"
         fi
         if [ "${GSHC_OS}" = "CentOS" ||  "${GSHC_OS}" = "RedHat" ]; then
             # My centos 7 has an install for almost the current postrgre (in late 2014),"
             # so I will use it."
-            yum -y install postgresql-server postgresql-libs postgresql-contrib postgresql-plpython
+            yum -y install postgresql-server postgresql-libs \
+                postgresql-contrib postgresql-plpython  >> "${log_file_name}"
         fi
         
         echo  ""
@@ -588,13 +649,13 @@ natmsg_install_postgre(){
         # one-time setup for postgres because it often
         # complains about permissions
         if [ ! -d  "${pguser_home_dir}/shardsvr" ]; then
-            mkdir -p "${pguser_home_dir}/dirsvr"
-            mkdir -p "${pguser_home_dir}/functions"
-            mkdir -p "${pguser_home_dir}/shardsvr"
-            mkdir -p "${pguser_home_dir}/sysmon"
+            mkdir -p "${pguser_home_dir}/dirsvr" >> "${log_file_name}"
+            mkdir -p "${pguser_home_dir}/functions" >> "${log_file_name}"
+            mkdir -p "${pguser_home_dir}/shardsvr" >> "${log_file_name}"
+            mkdir -p "${pguser_home_dir}/sysmon" >> "${log_file_name}"
         fi
-        chown -R postgres:postgres "${pguser_home_dir}"
-        chmod -R 700 "${pguser_home_dir}"
+        chown -R postgres:postgres "${pguser_home_dir}" >> "${log_file_name}"
+        chmod -R 700 "${pguser_home_dir}" >> "${log_file_name}"
         
         
         # start the server prefferably running in 'screen'
@@ -634,8 +695,8 @@ natmsg_install_postgre(){
             mkdir -p /root/noarch
         fi
         cd /root/noarch
-        wget https://pypi.python.org/packages/source/p/psycopg2/psycopg2-${psycopg_version}.tar.gz
-        wget https://pypi.python.org/packages/source/p/psycopg2/psycopg2-${psycopg_version}.tar.gz.asc # sig
+        wget https://pypi.python.org/packages/source/p/psycopg2/psycopg2-${psycopg_version}.tar.gz  |tee "${log_file_name}"
+        wget https://pypi.python.org/packages/source/p/psycopg2/psycopg2-${psycopg_version}.tar.gz.asc  |tee "${log_file_name}" # sig
         
         ### md5_check=$(openssl dgst -md5 psycopg2-2.5.4.tar.gz|cut -d ' ' -f 2)
         ### if [    "${md5_check}" = "25216543a707eb33fd83aa8efb6e3f26" ]; then
@@ -827,7 +888,6 @@ install_open_ssl(){
     # This will set GSHC_OS and GSHC_OS_VER globals:
     gshc_get_os;
 
-    
     if [ "${GSHC_OS}" = "Debian" ]; then
         # install libffi with headers:
         apt-get -y install libffi-dev

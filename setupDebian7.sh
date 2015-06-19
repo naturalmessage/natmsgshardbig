@@ -32,6 +32,7 @@
 # The command "dpkg-query -l 'python*'" showed python3 but without
 # a version number.
 # Also use apt-cache search PKGNAME
+# and to see if a package contains a file: dpkg -L zlib1g-dev
 ###############################################################################
 
 # load some utility functions
@@ -41,9 +42,6 @@
 
 ###############################################################################
 # a few preliminaries:
-apt-get update
-apt-get upgrade
-apt-get -y install screen curl vim sudo
 ###############################################################################
 
 echo "This is a setup for the shard server for Debian 7 (it also does"
@@ -125,6 +123,8 @@ DBNAME='shardsvrdb'
 
 DSTAMP=`date +"%Y%m%d%H%M%S"`
 
+LOG_FILE="${SOURCE_DIR}/natmsg_install-${DSTAMP}.log"
+
 MENU_PYOPENSSL="`cat <<EOF
 1) Skip this
    step.
@@ -156,15 +156,15 @@ gshc_continue;
 # NOW RUN THE SCRIPT FUNCTIONS TO INSTALL EVERYTHING
 
 if (gshc_confirm "Install basic preliminaries? (y/n): "); then
-	initial_installs;
+	initial_installs "${LOG_FILE}";
 fi
 
-natmsg_dir_setup "${SOURCE_DIR}";
+natmsg_dir_setup "${SOURCE_DIR}" "${LOG_FILE}";
 
-natmsg_install_python "${PYTHON_VER}";
+natmsg_install_python "${PYTHON_VER}" "${LOG_FILE}";
 
 natmsg_install_postgre "${PGSQL_BIN_DIR}" "${PGSQL_DATA}" "${PGUSER_HOME}" \
-    "${PSYCOPG_VER}";
+    "${PSYCOPG_VER}" "${LOG_FILE}";
 
 natmsg_install_cherrypy;
 
