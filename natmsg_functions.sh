@@ -436,6 +436,8 @@ gshc_get_os(){
     #    to run for certain OS or OS-version.
     # 2) This sets two global variables: GSHC_OS
     #    and GSHC_OS_VER
+    # 3) The version number is just the integer part
+    #    of the number.
 
     local silent='F'
 
@@ -460,10 +462,16 @@ gshc_get_os(){
 
     if [ -f /etc/centos-release ]; then
         GSHC_OS="CentOS"
-        GSHC_OS_VER="`cat /etc/centos-release|cut -d ' ' -f 3`"    
+        # # GSHC_OS_VER="`cat /etc/centos-release|cut -d ' ' -f 3`"    
+        GSHC_OS_VER=$(cat /etc/centos-release|sed -e 's/[[:print:]]*release \([0-9]*\)[[:print:]]*/\1/')
     elif [ -f /etc/fedora-release ]; then
         GSHC_OS="Fedora"
-        GSHC_OS_VER="`cat /etc/fedora-release|cut -d ' ' -f 3`"    
+        # # GSHC_OS_VER="`cat /etc/fedora-release|cut -d ' ' -f 3`"    
+        GSHC_OS_VER=$(cat /etc/fedora-release|sed -e 's/[[:print:]]*release \([0-9]*\)[[:print:]]*/\1/')
+    elif [ -f /etc/redhat-release ]; then
+        # This is a guess... not tested
+        GSHC_OS="RedHat"
+        GSHC_OS_VER=$(cat /etc/redhat-release|sed -e 's/[[:print:]]*release \([0-9]*\)[[:print:]]*/\1/')
     elif [ -f /etc/os-release ]; then
         sys_stuff=$(uname -a|grep -i debian)
         if [ -n "${sys_stuff}" ]; then
@@ -482,6 +490,8 @@ gshc_get_os(){
     if !(test "${silent}" = "T"); then
         echo "$GSHC_OS"
     fi
+
+    echo "TEMP TEST OS IS: ${GSHC_OS}"
 
     return 0
 }
@@ -502,9 +512,14 @@ gshc_safe_move(){
     # and can create the target. This is not infallible but prevents some situations
     # that can result in a corrupted file or unexpected state 
     # (e.g., duplicate files).
+    #
+    # If opt is set to 'missing_source_ok', then do not complain about
+    # a missing source file.
+    #
     # This might not reflect access from ACLs.
-    from_file="$1"
-    to_file="$2"
+    local from_file="$1"
+    local to_file="$2"
+    local opt="$3"
 
     if [ -f "${to_file}" ]; then
         echo "Error. the destination file already exists."
@@ -512,22 +527,42 @@ gshc_safe_move(){
         return 95
     fi
 
+    # verify that opt is blank or set properly
+    if ( [ -n "${opt}" ] && [ "${opt}" != "missing_source_ok" ] ); then
+        echo "Error.  The option for gshc_move is invalid: ${opt}."
+        echo "Source file: ${from_file}, dest file: ${to_file}."
+        gshc_continue
+        return 4786
+    fi
+
+    if [ ! -f "${from_file}" ]; then
+        if [  "${opt}" = "missing_source_ok" ]; then
+            return 0
+        else
+            echo "Error.  The source file was not found."
+            echo "Either delete the destination or pick a unique destination."
+            return 95
+        fi
+    fi
+
     allowed_to_move="FALSE"
     if gshc_is_root; then
         allowed_to_move="TRUE"
-    elif [ -O "${from_file}" ]; then
-        # File is owned by the user
-        allowed_to_move="TRUE"
-    elif [ -G "${from_file}" ]; then
-        # File is owned by the current group
-        allowed_to_move="TRUE"
-    elif [ -w "${from_file}" ]; then
-        # File is owned by the current group.
-        # Not that the system will issue a permission error 
-        # if the file is owned by root and group is set
-        # to the current group, and the user will still
-        # be able to move the file (on Fedora at least).
-        allowed_to_move="TRUE"
+    elif [ -f "${from_file}" ]; then
+        if [ -O "${from_file}" ]; then
+            # File is owned by the user
+            allowed_to_move="TRUE"
+        elif [ -G "${from_file}" ]; then
+            # File is owned by the current group
+            allowed_to_move="TRUE"
+        elif [ -w "${from_file}" ]; then
+            # File is owned by the current group.
+            # Not that the system will issue a permission error 
+            # if the file is owned by root and group is set
+            # to the current group, and the user will still
+            # be able to move the file (on Fedora at least).
+            allowed_to_move="TRUE"
+        fi
     fi
 
     if [ "${allowed_to_move}" = "TRUE" ]; then

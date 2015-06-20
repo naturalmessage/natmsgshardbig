@@ -74,7 +74,8 @@ install_python_tar_gz(){
         echo "calculated value."
         return 984
     fi
-    curl -L --url "${url}" > "${download_fname}"
+    # curl -L -O --url "${url}"
+    curl -L  --url "${url}" > "${download_fname}"
 
     # Unzip and untar.
     gunzip "${download_fname}"
@@ -92,7 +93,7 @@ install_python_tar_gz(){
     if !(/usr/local/bin/python3 setup.py install); then
         echo "Error.  The python setup command failed."
         echo "The source url was: ${url}."
-	gshc_continue
+    gshc_continue
         return 987
     fi
 
@@ -128,34 +129,53 @@ initial_installs(){
     cd /root/noarch
 
     # This will set GSHC_OS and GSHC_OS_VER globals:
+    echo "TEMP TEST before ${GSHC_OS}"
     gshc_get_os;
+    echo "TEMP TEST after ${GSHC_OS}"
 
     if [ "${GSHC_OS}" = "Debian" ]; then
-        echo "Running Debian basic installs..."
+        echo "Running Debian basic installs..." | tee "${log_file_name}"
         echo "updating and upgrading the OS"
         apt-get update >> "${log_file_name}"
         apt-get upgrade  >> "${log_file_name}"
-        echo "installing screen, curl, vim, sudo"
+        echo "installing screen, curl, vim, sudo" | tee "${log_file_name}"
+
         apt-get -y install screen curl vim sudo  >> "${log_file_name}"
 
-        apt-get -y install vim lynx screen rsync >> "${log_file_name}"
+        
+        echo -n "installing other stuff" | tee "${log_file_name}"
+        apt-get -y install vim lynx rsync >> "${log_file_name}"
+        echo -n "." | tee "${log_file_name}"
         apt-get -y install curl wget  >> "${log_file_name}"
+        echo -n "." | tee "${log_file_name}"
         apt-get -y install fail2ban >> "${log_file_name}"
+        echo -n "." | tee "${log_file_name}"
         apt-get -y install dpkg-dev >> "${log_file_name}"
-        apt-get -y install zip  # needed to open pyopenssl package 
+        echo -n "." | tee "${log_file_name}"
+        apt-get -y install zip   >> "${log_file_name}" # needed to open pyopenssl package 
+        echo -n "." | tee "${log_file_name}"
         # apps needed to install and compile the Natural Message server 
         # verification C programs.
+        echo -n "." | tee "${log_file_name}"
         apt-get -y install gcc >> "${log_file_name}"
+        echo -n "." | tee "${log_file_name}"
         apt-get -y install make >> "${log_file_name}"
-        echo "bzip2 (bz2) with C headers is needed for the libgcrypt install."
+        echo -n "." | tee "${log_file_name}"
+        # ntpdate will disappear, but it works for now
+        apt-get -y install ntpdate  >> "${log_file_name}"
+        echo
+        echo "bzip2 (bz2) with C headers is needed for the libgcrypt install." | tee "${log_file_name}"
         #apt-get -y install bzip2-devel
         apt-get source bzip2 >> "${log_file_name}"
+        echo -n "." | tee "${log_file_name}"
         #
         #
         # Devel headers needed for pyOpenssl to tet TLS_1_2
         #apt-get -y install openssl
         apt-get -y install dpkg-dev >> "${log_file_name}"
+        echo -n "." | tee "${log_file_name}"
         apt-get source openssl >> "${log_file_name}"
+        echo -n "." | tee "${log_file_name}"
         #
         # apt-get -y install lib${ARCHBITS}ncurses5-dev
 
@@ -165,40 +185,72 @@ initial_installs(){
         # run this to find headr files in packages..., it shows zlib.h:
         # dpkg -L zlib1g-dev
         apt-get -y install zlib1g-dev >> "${log_file_name}"
+        echo -n "." | tee "${log_file_name}"
         apt-get -y install zlibc >> "${log_file_name}"
+        echo -n "." | tee "${log_file_name}"
 
         apt-get source lib${ARCHBITS}ncurses5-dev >> "${log_file_name}"
+        echo -n "." | tee "${log_file_name}"
         # apt-get -y install sqlite3
         apt-get source sqlite3 >> "${log_file_name}"
+        echo -n "." | tee "${log_file_name}"
 
         #apt-get -y install readline
         apt-get source readline >> "${log_file_name}"
+        echo -n "." | tee "${log_file_name}"
 
         #apt-get -y install libpcap
         apt-get source libpcap >> "${log_file_name}"
+        echo -n "." | tee "${log_file_name}"
 
         # apt-get -y install xz-utils
         apt-get source xz-utils >> "${log_file_name}"
+        echo -n "." | tee "${log_file_name}"
 
+	# ffi and mercurial needed for the CherryPy install
         apt-get -y install libffi-dev >> "${log_file_name}"
-    else if [ ("${GSHC_OS}" = "CentOS" || "${GSHC_OS}" = "RedHat") && "${GSHC_OS_VER}" = "7" ]; then
+        apt-get -y install mercurial 
+        echo -n "." | tee "${log_file_name}"
+        echo 
+    elif ( ( [ "${GSHC_OS}" = "CentOS" ] || [ "${GSHC_OS}" = "RedHat" ]) && [ "${GSHC_OS_VER}" = "7" ]); then
         echo "Running CentOS/RedHat basic installs..."
 
-        yum upgrade >> "${log_file_name}"
+        yum -y upgrade |tee "${log_file_name}"
 
         # Verify that gcc is available to compile python3.
-        yum -y install gcc >> "${log_file_name}"
+        yum -y install gcc |tee "${log_file_name}"
 
         echo "bzip2 (bz2) is needed for the libgcrypt install."
         yum -y install bzip2-devel >> "${log_file_name}"
+        echo -n "." | tee "${log_file_name}"
+
+        # ntpdate will disappear, but it works for now
+        yum -y install ntpdate  >> "${log_file_name}"
+        echo -n "." | tee "${log_file_name}"
 
         # While I'm at it, install other devel versions for the sake of python..
         # (thanks to http://www.linuxtools.co/index.php/Install_Python_3.4_on_CentOS_7)
         ##yum groupinstall "Development tools"
-        yum install zlib-devel bzip2-devel openssl-devel ncurses-devel sqlite-devel \
-            readline-devel libpcap-devel xz-devel >> "${log_file_name}"
+        yum -y install zlib-devel bzip2-devel openssl-devel |tee "${log_file_name}"
+
+        yum -y install wget
+
+        yum -y install ncurses-devel |tee "${log_file_name}"
+    	yum -y install sqlite-devel \
+            readline-devel libpcap-devel xz-devel |tee "${log_file_name}"
         # I don't want the graphical tools...
         # gdbm-devel  db4-devel tk-devel 
+
+	# I don't see a built-in fail2ban
+	#yum -y install fail2ban
+
+	# zip, ffi, mercurial needed for CherryPy
+	yum -y install zip unzip
+        yum -y install libffi-devel
+	yum -y install mercurial
+
+	# bzip2 needed for libgcrypt install
+	yum -y install bzip2 
 
         if [ ! -d /root/noarch ]; then
             mkdir -p /root/noarch
@@ -228,10 +280,10 @@ initial_installs(){
                 mkdir -p /root/noarch
             fi
             cd /root/noarch
-            wget https://sqlite.org/2015/${SQLITE_FILE}  >> "${log_file_name}"
+            curl -L -O --url https://sqlite.org/2015/${SQLITE_FILE}
             
             gunzip ${SQLITE_FILE} >> "${log_file_name}"
-            ## untar the filename with ".gz"	dropped:
+            ## untar the filename with ".gz"    dropped:
             tar -xf ${SQLITE_FILE%%.gz} >> "${log_file_name}"
             
             if [ -d ${SQLITE_FILE%%.tar.gz} ]; then
@@ -245,6 +297,10 @@ initial_installs(){
             make >> "${log_file_name}"
             make install >> "${log_file_name}"
         fi
+    else
+    echo "Error. Unexpected OS or version: ${GSHC_OS} version: ${GSHC_OS_VER}"
+    gshc_pause
+    exit 85744
 
     fi
 
@@ -262,7 +318,7 @@ natmsg_dir_setup(){
     fi
 
     local source_directory="$1"
-    local log_flie_name="$2"
+    local log_file_name="$2"
 
     if [ ! -d "${source_directory}" ]; then
         echo "Error. The source directory for natmsg_dir_setup does not exist."
@@ -299,7 +355,8 @@ natmsg_dir_setup(){
         echo "You will now be prompted to enter a password for the natmsg"
         echo "user ID.    Use a good password because hackers will know that"
         echo "you have a natmsg user ID and might try to crack the password."
-        read -p '...' junk
+        echo ":"
+        read  junk
         passwd natmsg
     fi
 
@@ -411,8 +468,6 @@ natmsg_dir_setup(){
     chmod -R 700 /var/natmsg/conf  >> "${log_file_name}"
     chmod -R 700 /var/natmsg/private  >> "${log_file_name}"
 
-    # ntpdate will disappear, but it works for now
-    apt-get -y install ntpdate  >> "${log_file_name}"
     # sync the time
     ntpdate 2.fedora.pool.ntp.org  >> "${log_file_name}"
 
@@ -462,7 +517,9 @@ natmsg_install_python(){
 
         if [ ! -f Python-${python_version}.tgz ]; then
             # The Python file is not already here, so download it...
-            wget https://www.python.org/ftp/python/${python_version}/Python-${python_version}.tgz >> "${log_file_name}"
+            curl -L -O \
+                --url https://www.python.org/ftp/python/${python_version}/Python-${python_version}.tgz \
+                >> "${log_file_name}"
             tar -xf Python-${python_version}.tgz >> "${log_file_name}"
         fi
 
@@ -489,7 +546,7 @@ natmsg_install_python(){
       mkdir -p /root/noarch
     fi
     cd /root/noarch
-    wget https://bootstrap.pypa.io/ez_setup.py |tee "${log_file_name}"
+    curl -L -O --url https://bootstrap.pypa.io/ez_setup.py |tee "${log_file_name}"
     
     if !(/usr/local/bin/python3 ez_setup.py >> "${log_file_name}"); then
         echo "Error.  Failed to install setuptools (ez_setup)."
@@ -554,17 +611,25 @@ natmsg_install_postgre(){
     local pguser_home_dir="$3"
     local psycopg_version="$4"
     local log_file_name="$5"
+    local iface_name="$6"
 
     local install_p="FALSE"
+    echo "** Installing PostgreSQL from source" |tee  "${log_file_name}"
 
     if [ -z "${log_file_name}" ]; then
-        echo "Error. The log file name in natmsg_install_postgre is missing."
+        echo "Warning. The log file name in natmsg_install_postgre is missing."
         echo "setting to natmsg.log"
         log_file_name='natmsg.log'
         gshc_continue
     fi
 
-    echo "** Installing PostgreSQL from source" |tee  "${log_file_name}"
+    if [ -z "${iface_name}" ]; then
+        echo "Error.  The interface name in natmsg_install_postgre is missing."
+        echo "The value might be something like eth0 or one of the new variations."
+        gshc_continue
+	return 8475
+    fi
+
 
 
     # This will set GSHC_OS and GSHC_OS_VER globals:
@@ -587,15 +652,22 @@ natmsg_install_postgre(){
         # Install PostgreSQL
         #
         if [ "${GSHC_OS}" = "Debian" ]; then
+            echo -n "." | tee "${log_file_name}"
             apt-get -y install postgresql-server-dev-all  >> "${log_file_name}"
+            echo -n "." | tee "${log_file_name}"
             apt-get -y install postgresql postgresql-client  >> "${log_file_name}"
+            echo -n "." | tee "${log_file_name}"
             apt-get source postgresql-server-dev-all  >> "${log_file_name}"
+            echo -n "." | tee "${log_file_name}"
             # gpg to verify file sigs 
             apt-get -y install gpg  >> "${log_file_name}"
+            echo -n "." | tee "${log_file_name}"
             # for libpq-fe.h, install the devel version of libpqxx
             apt-get -y install libpqxx3-dev  >> "${log_file_name}"
+            echo "" | tee "${log_file_name}"
+
         fi
-        if [ "${GSHC_OS}" = "CentOS" ||  "${GSHC_OS}" = "RedHat" ]; then
+        if ( [ "${GSHC_OS}" = "CentOS" ] || [ "${GSHC_OS}" = "RedHat" ] ); then
             # My centos 7 has an install for almost the current postrgre (in late 2014),"
             # so I will use it."
             yum -y install postgresql-server postgresql-libs \
@@ -634,16 +706,29 @@ natmsg_install_postgre(){
         if [ -d "${pgsql_data_dir}"  ]; then
             # maybe also check for /var/lib/postgresql/9.1/main/postgresql.conf
             if [ ! -d "${pgsql_data_dir}/base" ]; then
-                sudo -u postgres "${pgsql_bin_dir}/pg_ctl" -D "${pgsql_data_dir}" initdb
+                if !(sudo -u "${pgsql_bin_dir}/postgres" "${pgsql_bin_dir}/pg_ctl" -D "${pgsql_data_dir}" initdb); then
+			echo "Error. Failed to initialize the postgresql database."
+			echo "Check the data directory: ${pgsql_data_dir}"
+			echo "If it is empty, then the database is not ready."
+			gshc_continue
+			return 29485
+		fi
             else
                 echo "It looks like the database was already initalized in " \
-                    "/var/lib/pgsql/data"
+                    "${pgsql_data_dir}"
             fi
         else
             echo "ERROR. there is no pg data directory in the expected place: " \
                 "${pgsql_data_dir}" 
             read -p "..." junk
         fi
+
+       # Double check for signs that the database was initialized
+       if ( [ ! -d "${pgsql_data_dir}/base" ] || [ ! -f "${pgsql_data_dir}/postgresql.conf"  ]); then
+           echo "Error. Failed to create the PostgreSQL database in ${pgsql_data_dir}."
+           gshc_continue
+           return 49594
+       fi
         
         #-------------------------------------
         # one-time setup for postgres because it often
@@ -657,6 +742,12 @@ natmsg_install_postgre(){
         chown -R postgres:postgres "${pguser_home_dir}" >> "${log_file_name}"
         chmod -R 700 "${pguser_home_dir}" >> "${log_file_name}"
         
+        # I currently leave the database serving 127.0.0.1,
+        # but if I change that, I would have to edit the conf file:
+        # ${PGSQL_CONF} and set the listen addres to the current IP
+        # the ifconfig trick will not work on the default CentOS 7.
+        # MY_IP=$(gshc_get_ipv4 $iface)
+        # echo "++++ I found my IP to be ${MY_IP} (I do not want 127.0.0.1 here)."
         
         # start the server prefferably running in 'screen'
         # declare -i chk_pg
@@ -673,16 +764,12 @@ natmsg_install_postgre(){
             cd "${pguser_home_dir}"
             sudo -u postgres "${pgsql_bin_dir}/postgres" \
                 -D "${pgsql_data_dir}"  > logfile 2>&1 &
+            if [ $? != 0 ]; then
+              echo "Error  starting the PostgreSQL server."
+              gshc_continue
+              exit 58678
+            fi
         fi
-        
-        
-        # This will attempt to edit the config file: ${PGSQL_CONF}
-        # file and set the listen addres to the current IP
-        # the ifconfig trick will not work on the default CentOS 7.
-        #MY_IP=$(ifconfig ${iface}|grep "inet add"|grep -v 127[.]0[.]0[.]1|tr \
-        #    -s ' '|cut -d ' ' -f 3|cut -d ':' -f 2)
-        MY_IP=$(gshc_get_ipv4)
-        echo "++++ I found my IP to be ${MY_IP} (I do not want 127.0.0.1 here)."
         
         ############################################################
         # Install psycopg2 for python3 (postgres interface for python)
@@ -695,8 +782,10 @@ natmsg_install_postgre(){
             mkdir -p /root/noarch
         fi
         cd /root/noarch
-        wget https://pypi.python.org/packages/source/p/psycopg2/psycopg2-${psycopg_version}.tar.gz  |tee "${log_file_name}"
-        wget https://pypi.python.org/packages/source/p/psycopg2/psycopg2-${psycopg_version}.tar.gz.asc  |tee "${log_file_name}" # sig
+        curl -L -O --url https://pypi.python.org/packages/source/p/psycopg2/psycopg2-${psycopg_version}.tar.gz \
+            |tee "${log_file_name}"
+        curl -L -O --url https://pypi.python.org/packages/source/p/psycopg2/psycopg2-${psycopg_version}.tar.gz.asc  \
+            |tee "${log_file_name}" # sig
         
         ### md5_check=$(openssl dgst -md5 psycopg2-2.5.4.tar.gz|cut -d ' ' -f 2)
         ### if [    "${md5_check}" = "25216543a707eb33fd83aa8efb6e3f26" ]; then
@@ -715,6 +804,14 @@ natmsg_install_postgre(){
         # You must run the correct python3 executable.  There might
         # be an old verion in /usr/bin.
         /usr/local/bin/python3 setup.py    install
+    else
+       # Double check for signs that the database was initialized
+       if ( [ ! -d "${pgsql_data_dir}/base" ] || [ ! -f "${pgsql_data_dir}/postgresql.conf"  ]); then
+           echo "Error. You skipped database installation, and you do not"
+           echo "apear to have a valid database in ${pgsql_data_dir}."
+           gshc_continue
+           return 49596
+       fi
         
     fi
 
@@ -749,7 +846,6 @@ natmsg_install_cherrypy(){
         # simplify the install.  This install will be from source.
         #
         # I need the mercurial VCS to get the source
-        apt-get -y install mercurial 
         ############################################################
         ############################################################
         
@@ -761,7 +857,7 @@ natmsg_install_cherrypy(){
         if !(/usr/local/bin/python3 setup.py install); then
             echo "The setup.py command for cherrypy returned an error."
             return 9587
-	    fi
+        fi
     else
         echo "Skipping CherryPy install."
     fi
@@ -856,7 +952,7 @@ natmsg_install_crypto(){
         # RNCryptor requires the Crypto python library, which
         # is described here: https://www.dlitz.net/software/pycrypto/doc/
         
-        curl -L --url https://ftp.dlitz.net/pub/dlitz/crypto/pycrypto/pycrypto-2.6.1.tar.gz > /root/noarch/pycrypto.tar.gz
+        curl -L -O --url https://ftp.dlitz.net/pub/dlitz/crypto/pycrypto/pycrypto-2.6.1.tar.gz 
         
         cd /root/noarch
         gunzip /root/noarch/pycrypto.tar.gz
@@ -891,9 +987,9 @@ install_open_ssl(){
     if [ "${GSHC_OS}" = "Debian" ]; then
         # install libffi with headers:
         apt-get -y install libffi-dev
-    else if [ ("${GSHC_OS}" = "CentOS" || "${GSHC_OS}" = "RedHat") && "${GSHC_OS_VER}" = "7" ]; then
+    elif ( ( [ "${GSHC_OS}" = "CentOS" ] || [ "${GSHC_OS}" = "RedHat" ]) && [ "${GSHC_OS_VER}" = "7" ]); then
         echo "Running CentOS/RedHat CherryPy install..."
-        #	CherryPy
+        #    CherryPy
         # There is a cherrypy and cherrypy2 install via EPEL for CentOS 7,
         # but I need cherrypy3.
         yum -y install hg 
@@ -1040,23 +1136,28 @@ install_self_signed_cert(){
         chmod 700 "${cert_key_root_dir}"
 
         # Make a copy of any old keys, and append a date-stamp to the file name:
+        echo "Note: I am testing for old keys to make backup copies of them" | tee "${log_file_name}"
+        echo "if they exist.  Warnings about missing keys are not a problem." | tee "${log_file_name}"
         if ! (gshc_safe_move \
                 "${cert_key_root_dir}/ca.key" \
-                "${cert_key_root_dir}/${dstamp}.ca.key" ); then
+                "${cert_key_root_dir}/${dstamp}.ca.key" \
+                "missing_source_ok"); then
             echo "Error. Failed to archive a key file"
             exit 239
         fi
 
         if !(gshc_safe_move \
                 "${cert_key_root_dir}/ca.csr" \
-                "${cert_key_root_dir}/${dstamp}.ca.csr"); then
+                "${cert_key_root_dir}/${dstamp}.ca.csr" \
+                "missing_source_ok"); then
             echo "Error. Failed to archive a key file"
             exit 239
         fi
 
         if !(gshc_safe_move  \
                 "${cert_key_root_dir}/ca.crt" \
-                "${cert_key_root_dir}/${dstamp}.ca.crt"); then
+                "${cert_key_root_dir}/${dstamp}.ca.crt" \
+                "missing_source_ok"); then
             echo "Error. Failed to archive a key file"
             exit 239
         fi
@@ -1239,7 +1340,7 @@ configure_postgres_sql(){
     if [ ! -d "${pguser_home_dir}" ]; then
         echo "Error. The source dir under which the original SQL is kept"
         echo "is not valid."
-        return 4945
+        return 4944
     fi
 
     if [ ! -d "${source_dir}" ]; then
@@ -1341,20 +1442,22 @@ initialize_natmsg_database(){
     if [ ! -d "${pguser_home_dir}" ]; then
         echo "Error. The source dir under which the original SQL is kept"
         echo "is not valid."
-        return 6945
+        return 7945
     fi
 
     
     cd "${pguser_home_dir}/shardsvr/sql"
 
     # start the server prefferably running in 'screen'
-    # declare -i chk_pg
+    #declare -i chk_pg
     chk_pg=$(ps -A|grep postgres|wc -l)
     echo "testing chk_pg: ${chk_pg}"
-    if [ "${chk_pg}" != "0" ]; then
+    if ( [ "${chk_pg}" !=  "0" ] && [ "${chk_pg}" !=  "1" ]); then
         echo "postgreSQL is already running"
     else
         echo "Starting the PostgreSQL database now"
+	echo "Note that Debian might create a default postgresql.conf, but "
+	echo "CentOS 7 does not."
         ### Note: postgres on Debian ran upon install with this command 
         ###(from ps -Af|less)
         ## "${pgsql_bin_dir}/postgres" -D "${pgsql_data}" -c config_file="${PGSQL_CONF}"

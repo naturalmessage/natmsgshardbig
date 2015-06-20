@@ -40,6 +40,7 @@
 
 . ./natmsg_install_functions.sh
 
+
 ###############################################################################
 # a few preliminaries:
 ###############################################################################
@@ -92,9 +93,13 @@ echo "Using network interface ${iface}"
 PGUSER_HOME='/var/lib/postgresql'  # on centOS, I use /home/postgres
 # The data directory changes depending on the 
 # OS version and install method
-PGSQL_DATA='/var/lib/postgresql/9.1/main'
-PGSQL_BIN_DIR='/usr/lib/postgresql/9.1/bin'
-PGSQL_CONF='/etc/postgresql/9.1/main/postgresql.conf'
+PGSQL_BIN_DIR='/usr/bin'
+# centos:
+PGSQL_DATA='/var/lib/postgresql/data'
+PGSQL_CONF='/var/lib/postgresql/data/postgresql.conf'
+# Debian:
+#PGSQL_DATA='/var/lib/postgresql/9.1/main'
+#PGSQL_CONF='/etc/postgresql/9.1/main/postgresql.conf'
 PYTHON_VER="3.4.3" # for source install only
 PSYCOPG_VER="2.6" # version used in the download for psychopg2
 
@@ -159,39 +164,63 @@ if (gshc_confirm "Install basic preliminaries? (y/n): "); then
 	initial_installs "${LOG_FILE}";
 fi
 
-natmsg_dir_setup "${SOURCE_DIR}" "${LOG_FILE}";
+if (gshc_confirm "Prepare Natural Message directories? (y/n): "); then
+    natmsg_dir_setup "${SOURCE_DIR}" "${LOG_FILE}";
+fi
 
 natmsg_install_python "${PYTHON_VER}" "${LOG_FILE}";
 
 natmsg_install_postgre "${PGSQL_BIN_DIR}" "${PGSQL_DATA}" "${PGUSER_HOME}" \
-    "${PSYCOPG_VER}" "${LOG_FILE}";
+    "${PSYCOPG_VER}" "${LOG_FILE}" "${iface}";
+
+
+if (gshc_confirm "Install cryptogrphy dependencies? (y/n): "); then
+    natmsg_install_crypto "${SIX_VER}" "${PYCPARSER_VER}" "${CFFI_VER}" \
+        "${PYASN_VER}" "${IDNA_VER}" "${CRYPTOGRAPHY_VER}" "${CRYPTO_VER}"
+fi
+
+if (gshc_confirm "Install pyopenssl dependencies? (y/n): "); then
+    install_open_ssl;
+fi
 
 natmsg_install_cherrypy;
 
-natmsg_install_crypto "${SIX_VER}" "${PYCPARSER_VER}" "${CFFI_VER}" \
-    "${PYASN_VER}" "${IDNA_VER}" "${CRYPTOGRAPHY_VER}" "${CRYPTO_VER}"
-
-install_open_ssl;
-
 install_self_signed_cert "${CERT_KEY_ROOT}" "${DSTAMP}" ; # user is prompted
 
-# The Requests lib for python comes from
-# http://docs.python-requests.org/en/latest/user/install/#get-the-code
-# and the downloaded directory looks something like this:
-# kennethreitz-requests-359659c
-install_python_tar_gz  https://github.com/kennethreitz/requests/archive/master.tar.gz;
+
+if (gshc_confirm "Install the ptyhon requests module? (y/n): "); then
+	# The Requests lib for python comes from
+	# http://docs.python-requests.org/en/latest/user/install/#get-the-code
+	# and the downloaded directory looks something like this:
+	# kennethreitz-requests-359659c
+	install_python_tar_gz  https://github.com/kennethreitz/requests/archive/master.tar.gz;
+fi
 
 install_libgcrypt "${LIBGPGERR_VER}" "${LIBGCRYPT_VER}" "${DSTAMP}";
 
-configure_postgres_sql "${PGUSER_HOME}" "${SOURCE_DIR}";
+# yes, install python3 from source again because the
+# other installes installed dependencies that are needed
+# before I compile python.
+natmsg_install_python "${PYTHON_VER}" "${LOG_FILE}";
 
-configure_sysmon "${PGUSER_HOME}" "${SOURCE_DIR}";
-
+if (gshc_confirm "Configure postgreSQL? (y/n): "); then
+    configure_postgres_sql "${PGUSER_HOME}" "${SOURCE_DIR}";
+fi
 
 initialize_natmsg_database "${PGUSER_HOME}" "${PGSQL_BIN_DIR}" \
     "${PGSQL_DATA}" "${DBNAME}";
 
+
+# Double check for signs that the database was initialized
+if ( [ ! -d "${PGSQL_DATA}/base" ] || [ ! -f "${PGSQL_DATA}/postgresql.conf"  ]); then
+    echo "Error (947). You do not apear to have a valid database in ${PGSQL_DATA}."
+    gshc_continue
+    exit 947
+fi
+
 install_natmsg_v;
+
+configure_sysmon "${PGUSER_HOME}" "${SOURCE_DIR}";
 
 natmsg_final_config;
 ###############################################################################
