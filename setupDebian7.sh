@@ -90,16 +90,29 @@ iface="${G_IF_NAME}"
 echo "Using network interface ${iface}"
 
 
-PGUSER_HOME='/var/lib/postgresql'  # on centOS, I use /home/postgres
 # The data directory changes depending on the 
 # OS version and install method
-PGSQL_BIN_DIR='/usr/bin'
-# centos:
-PGSQL_DATA='/var/lib/pgsql/data'
-PGSQL_CONF='/var/lib/pgsql/data/postgresql.conf'
-# Debian:
-#PGSQL_DATA='/var/lib/postgresql/9.1/main'
-#PGSQL_CONF='/etc/postgresql/9.1/main/postgresql.conf'
+
+# The gshc_get_os function will set GSHC_OS and GSHC_OS_VER globals.
+gshc_get_os;
+
+if [ "${GSHC_OS}" = "Debian" ]; then
+    # Debian:
+    PGUSER_HOME='/var/lib/postgresql'
+    PGSQL_BIN_DIR='/usr/lib/postgresql/9.1/bin'
+    PGSQL_DATA='/var/lib/postgresql/9.1/main'
+    PGSQL_CONF='/etc/postgresql/9.1/main/postgresql.conf'
+elif ( ( [ "${GSHC_OS}" = "CentOS" ] || [ "${GSHC_OS}" = "RedHat" ]) && [ "${GSHC_OS_VER}" = "7" ]); then
+    # centos:
+    PGUSER_HOME='/home/postgres'
+    PGSQL_BIN_DIR='/usr/bin'
+    PGSQL_DATA='/var/lib/pgsql/data'
+    PGSQL_CONF='/var/lib/pgsql/data/postgresql.conf'
+else
+    echo "Error. Unexpected OS or version: ${GSHC_OS} version: ${GSHC_OS_VER}"
+    gshc_pause
+    exit 55744
+fi
 PYTHON_VER="3.4.3" # for source install only
 PSYCOPG_VER="2.6" # version used in the download for psychopg2
 

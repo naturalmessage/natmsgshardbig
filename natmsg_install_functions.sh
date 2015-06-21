@@ -129,9 +129,7 @@ initial_installs(){
     cd /root/noarch
 
     # This will set GSHC_OS and GSHC_OS_VER globals:
-    echo "TEMP TEST before ${GSHC_OS}"
     gshc_get_os;
-    echo "TEMP TEST after ${GSHC_OS}"
 
     if [ "${GSHC_OS}" = "Debian" ]; then
         echo "Running Debian basic installs..." | tee "${log_file_name}"
@@ -298,12 +296,10 @@ initial_installs(){
             make install >> "${log_file_name}"
         fi
     else
-    echo "Error. Unexpected OS or version: ${GSHC_OS} version: ${GSHC_OS_VER}"
-    gshc_pause
-    exit 85744
-
+        echo "Error. Unexpected OS or version: ${GSHC_OS} version: ${GSHC_OS_VER}"
+        gshc_pause
+        exit 85744
     fi
-
     return 0
 }
 ###############################################################################
@@ -541,20 +537,26 @@ natmsg_install_python(){
     fi
 
     #----------------------------------------------------------------------
-    echo "Installing setuptools (ez_setup) from source."
-    if [ ! -d /root/noarch ]; then
-      mkdir -p /root/noarch
-    fi
-    cd /root/noarch
-    curl -L -O --url https://bootstrap.pypa.io/ez_setup.py |tee -a  "${log_file_name}"
-    
-    if !(/usr/local/bin/python3 ez_setup.py >> "${log_file_name}"); then
-        echo "Error.  Failed to install setuptools (ez_setup)."
-        echo "This will adversely impact other installations."
-        echo "It could be that ez_setup needs something installed"
-        echo "or compiled-into Python (in the past, it needed zlib)."
-        gshc_continue
-        exit 56
+    /usr/local/bin/python3 -c 'import setuptools'
+    if [ $? = 0 ]; then
+        echo "The Python setuptools module is already installed."
+    else
+        echo "Python setuptools is not installed.  Installing it now "
+        echo "because it is required later."
+        if [ ! -d /root/noarch ]; then
+          mkdir -p /root/noarch
+        fi
+        cd /root/noarch
+        curl -L -O --url https://bootstrap.pypa.io/ez_setup.py |tee -a  "${log_file_name}"
+        
+        if !(/usr/local/bin/python3 ez_setup.py >> "${log_file_name}"); then
+            echo "Error.  Failed to install setuptools (ez_setup)."
+            echo "This will adversely impact other installations."
+            echo "It could be that ez_setup needs something installed"
+            echo "or compiled-into Python (in the past, it needed zlib)."
+            gshc_continue
+            exit 56
+        fi
     fi
 
     return 0
@@ -944,12 +946,12 @@ natmsg_install_crypto(){
     /usr/local/bin/python3 -c 'import Crypto'
 
     if [ $? = 0 ]; then
-        echo "The python Crypto library is already installed."
+        echo "The python Crypto module is already installed."
     else
-        echo "The python Crypto library is NOT installed... Installing it now."
+        echo "The python Crypto module is NOT installed... Installing it now."
 
         install_python_tar_gz https://ftp.dlitz.net/pub/dlitz/crypto/pycrypto/pycrypto-${crypto_version}.tar.gz
-        # RNCryptor requires the Crypto python library, which
+        # RNCryptor requires the Crypto python module, which
         # is described here: https://www.dlitz.net/software/pycrypto/doc/
         
         curl -L -O --url https://ftp.dlitz.net/pub/dlitz/crypto/pycrypto/pycrypto-${crypto_version}.tar.gz 
@@ -1315,7 +1317,7 @@ install_libgcrypt(){
         # this might not be necessary now that I run the install above
         install -t /usr/local/lib  \
             /root/c/lib/${libgcrypt_version}/src/.libs/libgcrypt.a
-        chown root:root /usr/local/bin/libgcrypt.*
+        chown root:root /usr/local/lib/libgcrypt.*
         echo "I now have a static library for libgcrypt that can "
         echo "be compiled into my other programs"
     else
