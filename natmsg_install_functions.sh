@@ -215,10 +215,10 @@ initial_installs(){
     elif ( ( [ "${GSHC_OS}" = "CentOS" ] || [ "${GSHC_OS}" = "RedHat" ]) && [ "${GSHC_OS_VER}" = "7" ]); then
         echo "Running CentOS/RedHat basic installs..."
 
-        yum -y upgrade |tee "${log_file_name}"
+        yum -y upgrade |tee -a  "${log_file_name}"
 
         # Verify that gcc is available to compile python3.
-        yum -y install gcc |tee "${log_file_name}"
+        yum -y install gcc |tee -a  "${log_file_name}"
 
         echo "bzip2 (bz2) is needed for the libgcrypt install."
         yum -y install bzip2-devel >> "${log_file_name}"
@@ -231,13 +231,13 @@ initial_installs(){
         # While I'm at it, install other devel versions for the sake of python..
         # (thanks to http://www.linuxtools.co/index.php/Install_Python_3.4_on_CentOS_7)
         ##yum groupinstall "Development tools"
-        yum -y install zlib-devel bzip2-devel openssl-devel |tee "${log_file_name}"
+        yum -y install zlib-devel bzip2-devel openssl-devel |tee -a  "${log_file_name}"
 
         yum -y install wget
 
-        yum -y install ncurses-devel |tee "${log_file_name}"
+        yum -y install ncurses-devel |tee -a  "${log_file_name}"
     	yum -y install sqlite-devel \
-            readline-devel libpcap-devel xz-devel |tee "${log_file_name}"
+            readline-devel libpcap-devel xz-devel |tee -a  "${log_file_name}"
         # I don't want the graphical tools...
         # gdbm-devel  db4-devel tk-devel 
 
@@ -451,9 +451,9 @@ natmsg_dir_setup(){
             chmod 700 /var/natmsg/private  >> "${log_file_name}"
             chown -R natmsg:natmsg /var/natmsg/private  >> "${log_file_name}"
         else
-            echo "Error. I can not find the source test keys. They should be in"  |tee "${log_file_name}"
-            echo "the sql subdirectory in the github file (under ${source_directory})."  |tee "${log_file_name}"
-            echo "Test file was ${tst_file}"  |tee "${log_file_name}"
+            echo "Error. I can not find the source test keys. They should be in"  |tee -a  "${log_file_name}"
+            echo "the sql subdirectory in the github file (under ${source_directory})."  |tee -a  "${log_file_name}"
+            echo "Test file was ${tst_file}"  |tee -a  "${log_file_name}"
             exit 493
         fi
     fi
@@ -501,7 +501,7 @@ natmsg_install_python(){
         gshc_continue
     fi
 
-    echo "** Installing Python 3 from source to /usr/local/bin" |tee  "${log_file_name}"
+    echo "** Installing Python 3 from source to /usr/local/bin" |tee -a   "${log_file_name}"
 
     if (gshc_confirm "Do you want to install Python3 from source? (y/n): " ); then
         if [ ! -d /root/noarch ]; then
@@ -530,9 +530,9 @@ natmsg_install_python(){
             exit 123
         fi
         
-        ./configure --prefix=/usr/local --enable-shared |tee "${log_file_name}"
-        make |tee "${log_file_name}"
-        make install |tee "${log_file_name}"
+        ./configure --prefix=/usr/local --enable-shared |tee -a  "${log_file_name}"
+        make |tee -a  "${log_file_name}"
+        make install |tee -a  "${log_file_name}"
         # A python3 library is not in the default path,
         # so add it like this:
         # The ld.so.conf.d trick works on Centos 7, not sure about Debian 7.
@@ -546,7 +546,7 @@ natmsg_install_python(){
       mkdir -p /root/noarch
     fi
     cd /root/noarch
-    curl -L -O --url https://bootstrap.pypa.io/ez_setup.py |tee "${log_file_name}"
+    curl -L -O --url https://bootstrap.pypa.io/ez_setup.py |tee -a  "${log_file_name}"
     
     if !(/usr/local/bin/python3 ez_setup.py >> "${log_file_name}"); then
         echo "Error.  Failed to install setuptools (ez_setup)."
@@ -614,7 +614,7 @@ natmsg_install_postgre(){
     local iface_name="$6"
 
     local install_p="FALSE"
-    echo "** Installing PostgreSQL from source" |tee  "${log_file_name}"
+    echo "** Installing PostgreSQL from source" |tee -a   "${log_file_name}"
 
     if [ -z "${log_file_name}" ]; then
         echo "Warning. The log file name in natmsg_install_postgre is missing."
@@ -668,9 +668,9 @@ natmsg_install_postgre(){
 
         fi
         if ( [ "${GSHC_OS}" = "CentOS" ] || [ "${GSHC_OS}" = "RedHat" ] ); then
-            # My centos 7 has an install for almost the current postrgre (in late 2014),"
-            # so I will use it."
-            yum -y install postgresql-server postgresql-libs \
+            # My centos 7 has an install for almost the current postrgre (in late 2014),
+            # so I will use it.  Use the -devel package so that psycopg2 has libpq-fe.h.
+            yum -y install postgresql-devel postgresql-server postgresql-libs \
                 postgresql-contrib postgresql-plpython  >> "${log_file_name}"
         fi
         
@@ -706,7 +706,7 @@ natmsg_install_postgre(){
         if [ -d "${pgsql_data_dir}"  ]; then
             # maybe also check for /var/lib/postgresql/9.1/main/postgresql.conf
             if [ ! -d "${pgsql_data_dir}/base" ]; then
-                if !(sudo -u "${pgsql_bin_dir}/postgres" "${pgsql_bin_dir}/pg_ctl" -D "${pgsql_data_dir}" initdb); then
+                if !(sudo -u postgres "${pgsql_bin_dir}/pg_ctl" -D "${pgsql_data_dir}" initdb); then
 			echo "Error. Failed to initialize the postgresql database."
 			echo "Check the data directory: ${pgsql_data_dir}"
 			echo "If it is empty, then the database is not ready."
@@ -718,7 +718,7 @@ natmsg_install_postgre(){
                     "${pgsql_data_dir}"
             fi
         else
-            echo "ERROR. there is no pg data directory in the expected place: " \
+            echo "ERROR.  There is no pg data directory in the expected place: " \
                 "${pgsql_data_dir}" 
             read -p "..." junk
         fi
@@ -783,9 +783,9 @@ natmsg_install_postgre(){
         fi
         cd /root/noarch
         curl -L -O --url https://pypi.python.org/packages/source/p/psycopg2/psycopg2-${psycopg_version}.tar.gz \
-            |tee "${log_file_name}"
+            |tee -a  "${log_file_name}"
         curl -L -O --url https://pypi.python.org/packages/source/p/psycopg2/psycopg2-${psycopg_version}.tar.gz.asc  \
-            |tee "${log_file_name}" # sig
+            |tee -a  "${log_file_name}" # sig
         
         ### md5_check=$(openssl dgst -md5 psycopg2-2.5.4.tar.gz|cut -d ' ' -f 2)
         ### if [    "${md5_check}" = "25216543a707eb33fd83aa8efb6e3f26" ]; then
@@ -948,17 +948,18 @@ natmsg_install_crypto(){
     else
         echo "The python Crypto library is NOT installed... Installing it now."
 
-        install_python_tar_gz https://ftp.dlitz.net/pub/dlitz/crypto/pycrypto/pycrypto-2.6.1.tar.gz
+        install_python_tar_gz https://ftp.dlitz.net/pub/dlitz/crypto/pycrypto/pycrypto-${crypto_version}.tar.gz
         # RNCryptor requires the Crypto python library, which
         # is described here: https://www.dlitz.net/software/pycrypto/doc/
         
-        curl -L -O --url https://ftp.dlitz.net/pub/dlitz/crypto/pycrypto/pycrypto-2.6.1.tar.gz 
+        curl -L -O --url https://ftp.dlitz.net/pub/dlitz/crypto/pycrypto/pycrypto-${crypto_version}.tar.gz 
         
         cd /root/noarch
-        gunzip /root/noarch/pycrypto.tar.gz
-        tar -xf /root/noarch/pycrypto.tar
-        crypto_dir=$(ls -d pycrypto-* |sort -r|head -n 1)
-        cd "${crypto_dir}"
+        gunzip /root/noarch/pycrypto-${crypto_version}.tar.gz
+        tar -xf /root/noarch/pycrypto-${crypto_version}.tar
+        # # crypto_dir=$(ls -d pycrypto-* |sort -r|head -n 1)
+    	proj_dir=$(tar -tf "${/root/noarch/pycrypto-${crypto_version}.tar}"|head -n 1)
+        cd "${proj_dir}"
         # Be sure to run the correct version of python from
         # the correct directory
         /usr/local/bin/python3 setup.py install

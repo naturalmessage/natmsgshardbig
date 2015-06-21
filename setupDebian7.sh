@@ -95,8 +95,8 @@ PGUSER_HOME='/var/lib/postgresql'  # on centOS, I use /home/postgres
 # OS version and install method
 PGSQL_BIN_DIR='/usr/bin'
 # centos:
-PGSQL_DATA='/var/lib/postgresql/data'
-PGSQL_CONF='/var/lib/postgresql/data/postgresql.conf'
+PGSQL_DATA='/var/lib/pgsql/data'
+PGSQL_CONF='/var/lib/pgsql/data/postgresql.conf'
 # Debian:
 #PGSQL_DATA='/var/lib/postgresql/9.1/main'
 #PGSQL_CONF='/etc/postgresql/9.1/main/postgresql.conf'
