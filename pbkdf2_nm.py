@@ -45,7 +45,7 @@ import os
 ## Once you save a shard with a given iteration value
 ## you can not change the iteration value without causing
 ## decrypt errors on all the old shards.
-def pw_hash(iterations=97831, verify_fname='natmsg_pw_receipt.save'):
+def pw_hash(iterations=57137, verify_fname='natmsg_pw_receipt.save'):
 	# the user is prompted to enter a password, then it is hashed
 	receipt = None
 	pw_hashed = None

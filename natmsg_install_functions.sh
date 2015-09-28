@@ -753,9 +753,11 @@ natmsg_install_postgre(){
         
         # start the server prefferably running in 'screen'
         # declare -i chk_pg
-        chk_pg=$(ps -A|grep postgres|wc -l|tr -d ' ')
-        ##if [ ${chk_pg} > 4 ]; then
-        if [ "${chk_pg}" != "0" ]; then
+
+
+        chk_pg=$(ps -A|grep postgr|grep postgres|wc -l)
+        echo "testing chk_pg: ${chk_pg}"
+        if ( [ "${chk_pg}" !=  "0" ] && [ "${chk_pg}" !=  "1" ]); then
             echo "postgreSQL is already running (${chk_pg})"
         else
             echo "Starting the PostgreSQL database now"
@@ -806,15 +808,34 @@ natmsg_install_postgre(){
         # You must run the correct python3 executable.  There might
         # be an old verion in /usr/bin.
         /usr/local/bin/python3 setup.py    install
-    else
-       # Double check for signs that the database was initialized
-       if ( [ ! -d "${pgsql_data_dir}/base" ] || [ ! -f "${pgsql_data_dir}/postgresql.conf"  ]); then
-           echo "Error. You skipped database installation, and you do not"
-           echo "apear to have a valid database in ${pgsql_data_dir}."
-           gshc_continue
-           return 49596
-       fi
         
+    fi
+
+    # Double check for signs that the database was initialized and running
+    if ( [ ! -d "${pgsql_data_dir}/base" ] || [ ! -f "${pgsql_data_dir}/postgresql.conf"  ]); then
+        echo "Error. You do not apear to have a valid database in ${pgsql_data_dir}."
+        gshc_continue
+        return 49596
+    else
+        chk_pg=$(ps -A|grep postgr|grep postgres|wc -l)
+        echo "testing chk_pg: ${chk_pg}"
+        if ( [ "${chk_pg}" !=  "0" ] && [ "${chk_pg}" !=  "1" ]); then
+            echo "PostgreSQL is running (${chk_pg})"
+        else
+            echo "Starting the PostgreSQL database now"
+            cd "${pguser_home_dir}"
+            sudo -u postgres "${pgsql_bin_dir}/postgres" \
+                -D "${pgsql_data_dir}"  > logfile 2>&1 &
+
+            chk_pg=$(ps -A|grep postgr|grep postgres|wc -l)
+            echo "testing chk_pg: ${chk_pg}"
+            if ( [ "${chk_pg}" !=  "0" ] && [ "${chk_pg}" !=  "1" ]); then
+                echo "I started PostgreSQL, and it is running (${chk_pg})"
+            else
+                echo "Error.  The PostgreSQL database is not running."
+                gshc_continue
+                exit 5847
+            fi
     fi
 
     return 0
@@ -862,6 +883,15 @@ natmsg_install_cherrypy(){
         fi
     else
         echo "Skipping CherryPy install."
+    fi
+
+    /usr/local/bin/python3 -c 'import cherrypy'
+    if [ $? = 0 ]; then
+        echo "Cherrypy (web server/Python module) is working. "
+    else
+        echo "Error.  CherryPy is not working."
+        gshc_continue
+        exit 52274
     fi
 
     return 0
@@ -960,11 +990,20 @@ natmsg_install_crypto(){
         gunzip /root/noarch/pycrypto-${crypto_version}.tar.gz
         tar -xf /root/noarch/pycrypto-${crypto_version}.tar
         # # crypto_dir=$(ls -d pycrypto-* |sort -r|head -n 1)
-    	proj_dir=$(tar -tf "${/root/noarch/pycrypto-${crypto_version}.tar}"|head -n 1)
+    	proj_dir=$(tar -tf "/root/noarch/pycrypto-${crypto_version}.tar"|head -n 1)
         cd "${proj_dir}"
         # Be sure to run the correct version of python from
         # the correct directory
         /usr/local/bin/python3 setup.py install
+    fi
+
+    /usr/local/bin/python3 -c 'import Crypto'
+    if [ $? = 0 ]; then
+        echo "The python Crypto module is working."
+    else
+        echo "Error. The python Crypto module is NOT installed."
+        gshc_continue
+        exit 95873
     fi
 
     return 0
@@ -1587,6 +1626,12 @@ if [ -f "${HOME}/.gpg-agent-info" ]; then
              export SSH_AUTH_SOCK
 fi
 
+EOF
+    fi # end of .profile
+
+    tst_rc=$( cat /root/.bashrc |grep 033k)
+    if [ -z "${tst_rc}" ]; then
+cat >> ~/.bashrc <<EOF
 # To top GNU screen from changing the named
 # screens after every command, combined with
 # 'shelltitle "%t%" in .screenrc
@@ -1594,7 +1639,10 @@ fi
 # a GNU screen screen to stop the window title from changing.
 PROMPT_COMMAND='printf "\033k\033\134"'
 EOF
-    fi
+    fi # end of .bashrc
+
+
+    
 
     if [ ! -f /root/.vimrc ]; then
 cat <<EOF > /root/.vimrc
