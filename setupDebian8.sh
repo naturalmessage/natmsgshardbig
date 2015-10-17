@@ -20,7 +20,10 @@
 # along with Natural Message Shard Server.  If not, see <http://www.gnu.org/licenses/>.
 ################################################################################
 
+echo "STOP!! You should be running this inside of screen or tmux."
+read -p "Press ENTER to continue or CTL-c to quit..."
 
+################################################################################
 # Finding packages on Debian:
 # The command "dpkg-query -l 'python*'" showed python3 but without
 # a version number.
@@ -51,7 +54,7 @@ confirm(){
 }
 
 ################################################################################
-apt-get install screen
+apt-get -y install screen | tee -a "${LOG_FNAME}"
 
 echo "This is a setup for the shard main server (directory server)"
 echo "for Debian 8."
@@ -70,13 +73,14 @@ echo "##deb-src http://non-us.debian.org/debian-non-US stable/non-US main contri
 echo "   sudo apt-get update "
 echo "See https://wiki.debian.org/SourcesList"
 echo ""
-echo "I think I have to compile Python 3 from source AFTER I get"
-echo "the openssl install ready.  The _ssl library under"
-echo "ssl.py seems to require a python rebuild."
+## old deb 7 # echo "I think I have to compile Python 3 from source AFTER I get"
+## old deb 7 # echo "the openssl install ready.  The _ssl library under"
+## old deb 7 # echo "ssl.py seems to require a python rebuild."
 read -p  "Press ENTER t ocontinue or Ctl-c to quit." junk
 ################################################################################
 #                     CHECK EACH OF THESE OPTIONS
 #
+DSTAMP=`date +"%Y%m%d%H%M%S"`
 SOURCE_DIR=$(pwd)
 iface='eth0'
 
@@ -85,6 +89,14 @@ SHARD_DIR="${PGUSER_HOME}/shardsvr/"
 PGSQL_DATA='/var/lib/postgresql/9.4/main' #debian
 PGSQL_BIN='/usr/lib/postgresql/9.4/bin/'
 PGSQL_CONF='/etc/postgresql/9.4/main/postgresql.conf'
+
+### options for DIRSVR
+
+LOG_FNAME="${PGUSER_HOME}/setup${DSTAMP}.log"
+DIRSVR_DIR="${PGUSER_HOME}/dirsvr/"
+#DBNAME='dirsvrdb'
+### end options for DIRSVR
+
 
 # You can check the currently install library versions with
 #   apt list |grep gpg
@@ -105,7 +117,6 @@ CERT_KEY_ROOT='/var/natmsg/private'
 
 DBNAME='shardsvrdb' 
 
-DSTAMP=`date +"%Y%m%d%H%M%S"`
 
 ################################################################################
 clear
@@ -137,40 +148,36 @@ if [ ! -d /root/noarch ]; then
 fi
 cd /root/noarch
 
-apt-get -y install vim lynx screen rsync
-apt-get -y install curl wget # needed for installs
-apt-get -y install fail2ban
+apt-get -y install vim lynx screen rsync | tee -a "${LOG_FNAME}"
+apt-get -y install curl wget  | tee -a "${LOG_FNAME}" # needed for installs
+apt-get -y install fail2ban | tee -a "${LOG_FNAME}"
 
 # apps needed to install and compile the Natural Message server 
 # verification C programs.
-apt-get -y install gcc
-apt-get -y install make
+apt-get -y install gcc | tee -a "${LOG_FNAME}"
+apt-get -y install make | tee -a "${LOG_FNAME}"
 echo "bzip2 (bz2) with C headers is needed for the libgcrypt install."
 #apt-get -y install bzip2-devel
-apt-get source bzip2
+apt-get source bzip2 | tee -a "${LOG_FNAME}"
 #
 #
 # Devel headers needed for pyOpenssl to tet TLS_1_2
 #apt-get -y install openssl
-apt-get -y install dpkg-dev
-apt-get source openssl
+apt-get -y install dpkg-dev | tee -a "${LOG_FNAME}"
+apt-get source openssl | tee -a "${LOG_FNAME}"
 #
 # apt-get -y install lib${ARCHBITS}ncurses5-dev
 
-apt-get -y install zlib1g-dev
+apt-get -y install zlib1g-dev | tee -a "${LOG_FNAME}"
 
-apt-get source lib${ARCHBITS}ncurses5-dev
-# apt-get -y install sqlite3
-apt-get source sqlite3
+apt-get source lib${ARCHBITS}ncurses5-dev | tee -a "${LOG_FNAME}"
+apt-get source sqlite3 | tee -a "${LOG_FNAME}"
 
-#apt-get -y install readline
-apt-get source readline
+apt-get source readline | tee -a "${LOG_FNAME}"
 
-#apt-get -y install libpcap
-apt-get source libpcap
+apt-get source libpcap | tee -a "${LOG_FNAME}"
 
-# apt-get -y install xz-utils
-apt-get source xz-utils
+apt-get source xz-utils | tee -a "${LOG_FNAME}"
 
 ################################################################################
 ############################################################
@@ -300,7 +307,7 @@ fi
 
 
 # ntpdate will disappear, but it works for now
-apt-get -y install ntpdate
+apt-get -y install ntpdate | tee -a "${LOG_FNAME}"
 # sync the time
 ntpdate 2.fedora.pool.ntp.org
 
@@ -324,8 +331,8 @@ fi
 # Python 3 from source seems to be needed for Debian 7 because
 # the builtin _ssl lib did not have TLS_1_2.
 #
-apt-get -y install python3
-apt-get -y install python3-openssl
+apt-get -y install python3 | tee -a "${LOG_FNAME}"
+apt-get -y install python3-openssl | tee -a "${LOG_FNAME}"
 ### read -p "Do you want to install Python3 from source? (y/n): " MENU_CHOICE
 ### case $MENU_CHOICE in
 ### 	'n'|'N')
@@ -460,9 +467,9 @@ if [	"${MENU_CHOICE}" = "y" ]; then
 	# Install PostgreSQL
 	#
 	##yum -y install postgresql-server postgresql-libs	postgresql-contrib postgresql-plpython
-	apt-get -y install postgresql-server-dev-all
-	apt-get -y install postgresql postgresql-client
-	apt-get source postgresql-server-dev-all
+	apt-get -y install postgresql-server-dev-all | tee -a "${LOG_FNAME}"
+	apt-get -y install postgresql postgresql-client | tee -a "${LOG_FNAME}"
+	apt-get source postgresql-server-dev-all | tee -a "${LOG_FNAME}"
 	apt-get -y install pgp # for verification of downloaded files.
 	
 	echo  ""
@@ -531,7 +538,7 @@ if [	"${MENU_CHOICE}" = "y" ]; then
 		###(from ps -Af|less)
 		## "${PGSQL_BIN}/postgres" -D "${PGSQL_DATA}" -c config_file="${PGSQL_CONF}"
 		cd "${PGUSER_HOME}"
-		sudo -u postgres "${PGSQL_BIN}/postgres" -D "${PGSQL_DATA}"  > logfile 2>&1 &
+		sudo -u postgres "${PGSQL_BIN}/postgres" -D "${PGSQL_DATA}"  > "${LOG_FNAME}" 2>&1 &
 	fi
 	
 	
@@ -571,13 +578,13 @@ if [	"${MENU_CHOICE}" = "y" ]; then
 	### gpg --verify psycopg2-2.5.4.tar.gz.asc psycopg2-2.5.4.tar.gz
 	
 	# for libpq-fe.h, install the devel version of libpqxx
-	apt-get -y install libpqxx3-dev
-	gunzip psycopg2-2.5.4.tar.gz
-	tar -xf psycopg2-2.5.4.tar
-	cd psycopg2-2.5.4
+	apt-get -y install libpqxx3-dev | tee -a "${LOG_FNAME}"
+	gunzip psycopg2-2.5.4.tar.gz | tee -a "${LOG_FNAME}"
+	tar -xf psycopg2-2.5.4.tar | tee -a "${LOG_FNAME}"
+	cd psycopg2-2.5.4 | tee -a "${LOG_FNAME}"
 	# You must run the correct python3 executable.  There might
 	# be an old verion in /usr/bin.
-	/usr/local/bin/python3 setup.py	install
+	/usr/local/bin/python3 setup.py	install | tee -a "${LOG_FNAME}"
 	
 fi
 # end of postgres install
@@ -595,19 +602,9 @@ else
 	echo "Cherrypy is not installed.  Installing now."
 	# Debian 8 has a package for python3-cherrypy3 that should
 	# simplify the install.  The old Debian 7 installed from source.
-    apt-get -y install python3-cherrypy3
+  apt-get -y install python3-cherrypy3 | tee -a "${LOG_FNAME}"
 	#
 	#
- 	### I need the mercurial VCS to get the source
-	## apt-get -y install mercurial 
-	############################################################
-	############################################################
-	
-    ## mkdir -p /root/noarch/CherryPySource
-    ## cd /root/noarch/CherryPySource
-    ## hg clone https://bitbucket.org/cherrypy/cherrypy
-    ## cd cherrypy
-    ## python3 setup.py install
 fi
 
 ################################################################################
@@ -650,12 +647,11 @@ fi
 #															OpenSSL for CherryPy
 ## The SSL certs can not have a password, so put them
 ## in an ecryptfs directory
-# apt-get -y install ecryptfs-utils gettext
 
 # install libffi with headers:
-apt-get -y install libffi-dev
+apt-get -y install libffi-dev | tee -a "${LOG_FNAME}"
 
-apt-get -y install python3-openssl
+apt-get -y install python3-openssl | tee -a "${LOG_FNAME}"
 #
 # This is the old debian 7 routine:
 ## ##  # The built-in version of the python ssl lib in Debian7 did not have tls 1.2
@@ -779,7 +775,7 @@ fi
 ##
 ## This was installed from source in Debian 7, now there is a package:
 
-apt-get -y install python3-requests
+apt-get -y install python3-requests | tee -a "${LOG_FNAME}"
 #### old debian 7 version
 ### if [  "${MENU_CHOICE}" = "y" ]; then
 ###   cd /root/noarch
@@ -973,8 +969,114 @@ else
 fi
 
 
+################################################################################
+################################################################################
+
+# gpg agent (for the future mix network)
+if [ ! -f ~/.profile ]; then
+cat >> ~/.profile <<EOF
+agent_check=$(ps -A|grep " gpg[-]agent$")
+if [	-z "${agent_check}" ]; then
+	 gpg-agent --daemon --enable-ssh-support \
+	 --write-env-file "${HOME}/.gpg-agent-info"
+fi
+if [ -f "${HOME}/.gpg-agent-info" ]; then
+			 . "${HOME}/.gpg-agent-info"
+			 export GPG_AGENT_INFO
+			 export SSH_AUTH_SOCK
+fi
+
+# To top GNU screen from changing the named
+# screens after every command, combined with
+# 'shelltitle "%t%" in .screenrc
+# You have to manually run this command INSIDE
+# a GNU screen screen to stop the window title from changing.
+PROMPT_COMMAND='printf "\033k\033\134"'
+EOF
+fi
+
+if [ ! -f /root/.vimrc ]; then
+cat <<EOF > /root/.vimrc
+" The ic option is for case insenstive search:
+set ic
+if &t_Co > 2 || has("gui_running")
+	syntax on
+	set hlsearch
+		" set font for GUI
+		set gfn=Monospace\ 14
+endif
+
+set wrap
+" line break
+set ruler
+set showcmd
+
+" shiftwidth controls indentation when
+" shiftwidth controls indentation when
+" the user prcesses the > character.
+set shiftwidth=2
+
+" tabstop is the width of the tab character.
+set tabstop=2
+EOF
+fi
+
+
+if [ ! -f /root/.screenrc ]; then
+cat <<EOF > /root/.screenrc
+shelltitle "zz%t%"
+hardstatus on
+hardstatus alwayslastline
+hardstatus string "%{.bW}%-w%{.rW}%n %t%{-}%+w %=%{..G} %H %{..Y} %m/%d %C%a "
+#hardstatus string "%t%"
+EOF
+fi
+############################################################
+rslt=$(crontab -l|grep monitor.py)
+	if [	-z "${rslt}" ]; then
+	echo "============================================================"
+	echo "Manual crontab setup:"
+	echo "Create a cron job to run /var/natmsg/monitor.py every 5 min"
+	echo "under the root user ID.  Use this command:"
+	echo "   sudo crontab -e"
+	echo "to edit a crontab, then past the example text, and double check"
+	echo "the python3 program name and the python script file name."
+	echo "*/5 * * * * /usr/local/bin/python3 /var/natmsg/monitor.py"
+	echo "copy the line above with the mouse and prepare to paste it into crontab..."
+	read -p "Press any key to continue ..." junk
+	crontab -e
+fi
+############################################################
+
+################################################################################
+################################################################################
+cd /root/noarch
+wget https://github.com/naturalmessage/natmsgv/archive/master.tar.gz -O natmsgv.tar.gz
+gunzip natmsgv.tar.gz
+tar -xf natmsgv.tar
+cd natmsgv-master
+make
+
+if [ $? != 0 ]; then
+	echo "Failed to make natmsgv (server verification C program"
+fi
+cp nm_* /var/natmsg
+chown natmsg:natmsg /var/natmsg/nm_*
+################################################################################
+############################################################
+############################################################
+############################################################
 #############################################################
-echo "Preparing the SQL for the shard server..."
+clear
+echo "The first part of the installation is finished." | tee -a "${LOG_FNAME}"
+echo "The next (final) step will install files unique to "
+echo "the shard server (as opposed to the directory server)."
+if confirm(); then
+	echo "Continuing."
+else
+	echo "quitting now."
+	exit 0
+fi
 
 if grep '^postgres[:]' /etc/passwd; then
 	# The postgres user exists. Create some directories.
@@ -1089,101 +1191,5 @@ if [ -z "${chk_shard}" ]; then
 else
 	echo "I am not installing the shard server tables because I already " \
 		"found a shard table."
-fi
-
-################################################################################
-################################################################################
-cd /root/noarch
-wget https://github.com/naturalmessage/natmsgv/archive/master.tar.gz -O natmsgv.tar.gz
-gunzip natmsgv.tar.gz
-tar -xf natmsgv.tar
-cd natmsgv-master
-make
-
-if [ $? != 0 ]; then
-	echo "Failed to make natmsgv (server verification C program"
-fi
-cp nm_* /var/natmsg
-chown natmsg:natmsg /var/natmsg/nm_*
-################################################################################
-################################################################################
-################################################################################
-
-
-
-
-# gpg agent (for the future mix network)
-if [ ! -f ~/.profile ]; then
-cat >> ~/.profile <<EOF
-agent_check=$(ps -A|grep " gpg[-]agent$")
-if [	-z "${agent_check}" ]; then
-	 gpg-agent --daemon --enable-ssh-support \
-	 --write-env-file "${HOME}/.gpg-agent-info"
-fi
-if [ -f "${HOME}/.gpg-agent-info" ]; then
-			 . "${HOME}/.gpg-agent-info"
-			 export GPG_AGENT_INFO
-			 export SSH_AUTH_SOCK
-fi
-
-# To top GNU screen from changing the named
-# screens after every command, combined with
-# 'shelltitle "%t%" in .screenrc
-# You have to manually run this command INSIDE
-# a GNU screen screen to stop the window title from changing.
-PROMPT_COMMAND='printf "\033k\033\134"'
-EOF
-fi
-
-if [ ! -f /root/.vimrc ]; then
-cat <<EOF > /root/.vimrc
-" The ic option is for case insenstive search:
-set ic
-if &t_Co > 2 || has("gui_running")
-	syntax on
-	set hlsearch
-		" set font for GUI
-		set gfn=Monospace\ 14
-endif
-
-set wrap
-" line break
-set ruler
-set showcmd
-
-" shiftwidth controls indentation when
-" shiftwidth controls indentation when
-" the user prcesses the > character.
-set shiftwidth=2
-
-" tabstop is the width of the tab character.
-set tabstop=2
-EOF
-fi
-
-
-if [ ! -f /root/.screenrc ]; then
-cat <<EOF > /root/.screenrc
-shelltitle "zz%t%"
-hardstatus on
-hardstatus alwayslastline
-hardstatus string "%{.bW}%-w%{.rW}%n %t%{-}%+w %=%{..G} %H %{..Y} %m/%d %C%a "
-#hardstatus string "%t%"
-EOF
-fi
-############################################################
-rslt=$(crontab -l|grep monitor.py)
-	if [	-z "${rslt}" ]; then
-	echo "============================================================"
-	echo "Manual crontab setup:"
-	echo "Create a cron job to run /var/natmsg/monitor.py every 5 min"
-	echo "under the root user ID.  Use this command:"
-	echo "   sudo crontab -e"
-	echo "to edit a crontab, then past the example text, and double check"
-	echo "the python3 program name and the python script file name."
-	echo "*/5 * * * * /usr/local/bin/python3 /var/natmsg/monitor.py"
-	echo "copy the line above with the mouse and prepare to paste it into crontab..."
-	read -p "Press any key to continue ..." junk
-	crontab -e
 fi
 ############################################################
