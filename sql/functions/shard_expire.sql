@@ -1,4 +1,4 @@
--- shard_expire.sql contains function shardsvr.shard_expire
+-- shard_expire.sql contains function shardsvrdb.shard_expire
 
 -- This expires a shard, it does not perform 'delete/burn' of the shard data.
 -- A shard 'expires' when the time has run out and it has not been read.
@@ -7,9 +7,9 @@
 -- ----------------------------------------
 -- ----------------------------------------
 -- ----------------------------------------
-DROP FUNCTION IF EXISTS shardsvr.shard_expire();
+DROP FUNCTION IF EXISTS shardsvrdb.shard_expire();
 
-CREATE FUNCTION shardsvr.shard_expire() RETURNS int AS $$
+CREATE FUNCTION shardsvrdb.shard_expire() RETURNS int AS $$
 DECLARE
 rows_expired int;
 BEGIN
@@ -21,7 +21,7 @@ BEGIN
 	-- record was created.
 	-- If the record was  expired, do nothing, because it
 	-- has already been fixed
-	UPDATE shardsvr.shards
+	UPDATE shardsvrdb.shards
 	SET 
     shard = '\x0000000000000000000000000000000000000000',
 		expired = true,
@@ -39,5 +39,5 @@ $$
 LANGUAGE 'plpgsql';
 
 -- example:
--- select shardsvr.shard_expire('SID0000000101234567890bcdef0123456789abcdef01234567201408081942678857797');
+-- select shardsvrdb.shard_expire('SID0000000101234567890bcdef0123456789abcdef01234567201408081942678857797');
 

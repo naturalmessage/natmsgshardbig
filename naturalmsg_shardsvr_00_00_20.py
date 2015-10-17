@@ -1,5 +1,9 @@
-# -*- coding: utf-8 -*-
 # naturalmsg_shardsvr_00_00_20.py
+#
+# to do: add pep8 to setupDebian.sh
+# debian 8 conf file location for postgre: /etc/postgresql/9.4/main/postgresql.conf
+# for debian 8, you might have to edit the postgres conf file to enable logging 
+# for database errors.
 #
 ###############################################################################
 # Copyright 2015 Natural Message, LLC.
@@ -21,43 +25,6 @@
 # along with Natural Message Shard Server.  If not,
 # see <http://www.gnu.org/licenses/>.
 ###############################################################################
-"""naturalmsg_shardsvr
-
-This program will run a shard server in the Natural Message network.
-
-A shard server can hold a small piece of a password, a small chunk of a file
-(or message) or a large chunk of a file (or message).  The purpose of 
-the server is to allow multiple servers to hold pieces of passwords and
-files such that no one person, company, or perhaps even country, has
-posession of a file.  The results is an increased degree of privacy
-to a person who stores information or transfers information across
-a network.
-
-When a shard is retrieved, it is burned (delete).  A database record will
-remain for a week or two to notify a client that the shard has already
-been burned (or that it expired).
-
-Any shard that is not retrieved will automatically be deleted in about
-5 days or so (via an external cron job).
-
-The operation is relatively simple:
-call shard_create with a shard ID that begins with the letters SID
-and contains 32 ASCII hex characters and an attached file named
-shard_data.  You will receive JSON in return.
-
-To read ashard, call shard_read?shard_id=SID..... with the 
-full shard ID to read: your shard will be downloaded.
-
-Shard server operators can choose to restrict the maximum
-shard size using the conf file (typically located in
-/var/natmsg/conf).  Information about the server can be
-sent to naturalmessage@fastmail.fm or the current
-contact info at naturalmesasge.com/contact to allow
-users of the network to see your server.  That information
-can contain a flag it indicate that only passwords should
-be stored on your server, which means that nobody would be
-allowed to store prohibited material on your server.
-"""
 # To do: Add check for old shards and issue a warning if the
 # auto delete is not working.
 #
@@ -148,6 +115,7 @@ ONLINE_PRV_SIGN_KEY_FNAME = ''
 ONLINE_PUB_ENC_KEY_FNAME = ''
 ONLINE_PRV_ENC_KEY_FNAME = ''
 OFFLINE_PUB_SIGN_KEY_FNAME = ''
+
 CRONTAB_ROOT = ''
 
 from cherrypy.process.plugins import DropPrivileges, PIDFile
@@ -171,14 +139,6 @@ import time
 
 
 if test_or_prod not in ('test', 'prod', 'exp'):
-    """Verify that the user speciried a code for test, prod...
-
-    The option coded above specifies one of 'test', 'prod', or
-    'exp' (where 'exp' means experimental).  The options
-    change the input configuration file, the output log file,
-    and the PID (process ID) file.
-    """
-
     print('Error. "test_or_prod" must be one of test, prod, exp.')
     sys.exit(12)
 
@@ -186,7 +146,6 @@ if test_or_prod not in ('test', 'prod', 'exp'):
 def fail_if_not_exist(
         fname,
         note='(no description of where the file was used)'):
-    """A shortcut to crash if an essential file is not ready during start."""
     if fname is None:
         print('Error.  Filename is missing for ' + note)
         sys.exit(998)
@@ -201,14 +160,9 @@ def fail_if_not_exist(
 
 
 def load_config():
-    """Load CherryPy config options.
-
-    Load Cherrypoy configuration options from the config flie and return
-    the conf dictionary, which will go to quickstart or another cherrypy
-    start routine.
+    """This will set some cherrypoy configuratoin options and return the conf
+    dictionary, which will go t oquickstart or another cherrypy start routine.
     """
-    global test_or_prod
-    global NM_VERSION_STRING
     global SERVER_FINGERPRINT
     global HOSTNAME, DBNAME, DB_UNAME, DB_PW
 
@@ -224,14 +178,9 @@ def load_config():
     # and a few other things:
     cherrypy.config.update(cp_config_fname)
 
-    # Disable the option that causes the CherryPy server to restart
-    # when the config file or program file is changed.
     cherrypy.config.update({'engine.autoreload.on': False})
-
-    # Options for all or for specific web pages.
-    #
-    # Note: Connection keep-alive is depricated because connections
-    # are kept open until Connection: close is sent by the server.
+    # Connection keep-alive is depricated because connections
+    # are kept open until Connection: close is sent by the server?
     #('Connection', 'close'),
     conf = {
         'global': {
@@ -304,11 +253,10 @@ def load_config():
         }
     }
 
-    # save a PID (process ID) file:
     cp_id_fname = cherrypy.config['natmsg_root'] + os.sep \
         + 'cp_shard_' + NM_VERSION_STRING + '.pid'
 
-    # Server pidfile (this registers the ID number of the running
+    # server pidfile (this registers the ID number of the running
     # instance as shown in 'ps -A' terminal command).
     if os.path.isfile(cp_id_fname):
         print('Error. the program ID file already exists: '
@@ -351,8 +299,6 @@ def load_config():
     DB_UNAME = cherrypy.config['DB_UNAME']
     DB_PW = cherrypy.config['DB_PW']
 
-    # I want to fail now rather than to start the server with
-    # missing keys..
     ONLINE_PUB_SIGN_KEY_FNAME = cherrypy.config['ONLINE_PUB_SIGN_KEY_FNAME']
     fail_if_not_exist(ONLINE_PUB_SIGN_KEY_FNAME, 'online pub sign key')
 
@@ -388,7 +334,7 @@ def load_config():
         + 'delete old, unread shards when they expire.  You have to ' \
         + 'verify the correct path to the python3 program and to the ' \
         + 'housekeeping program, but the general format is: ' + os.linesep \
-        + 'sudo -u natmsg crontab -e' + os.linesep \
+        + 'sudo -u natmsg crontabe -e' + os.linesep \
         + '* 2 * * * /usr/local/bin/python3 ' \
         + '/var/natmsg/housekeeping_shardsvr.py'
     if not os.path.isfile(os.path.join(CRONTAB_ROOT, 'natmsg')):
@@ -397,11 +343,9 @@ def load_config():
 
     try:
         fd = open(os.path.join(CRONTAB_ROOT, 'natmsg'), 'r')
-        try:
-            cron_dat = fd.read()
-        finally:
-            fd.close()
-    except IOError:
+        cron_dat = fd.read()
+        fd.close()
+    except Exception:
         raise RuntimeError(crontab_msg)
 
     if cron_dat.find('housekeeping') < 0:
@@ -441,23 +385,15 @@ def load_config():
     # test if the database is online
     conn, msg_d = shardfuncs.shard_connect(CONN_STR)
     if conn is None:
-        try:
-            print(msg_d)
-        except Exception:
-            print(repr(msg_d))
- 
-        print('Error. Could not connect to the database.  Is it Running?  '
-            + 'Check \'ps -A|grep postgres\', or '
-            + 'try running /root/psqlgo.sh for '
+        print('Error. Could not connect to the datase.  Is it Running?  '
+            + 'Try running /root/psqlgo.sh for '
             + 'the natural message start script.')
         sys.exit(15)
     else:
         conn.close()
     #- - - - - - - - - - - - - - - - - - - -
     # This is for error messages generated by the shard server.
-    #shardfuncs.LOGFILE = cherrypy.config['LOGFILE']
-    shardfuncs.LOGFILE = os.path.join(cherrypy.config['natmsg_root'],
-        'log_natmsg_', test_or_prod, '_', NM_VERSION_STRING, '.log')
+    shardfuncs.LOGFILE = cherrypy.config['LOGFILE']
 
     return(conf)
 
@@ -479,20 +415,15 @@ class StringGenerator(object):
         # cherrypy root, which might not be /var/natmsg/html
 
         fd = None
-        dat = None
         try:
             fd = codecs.open('html/' + pgname, 'r', 'utf8')
-            try:
-                dat = fd.read()
-            finally:
-                fd.close()
         except Exception:
             pass
 
-        if dat is None:
+        if fd is None:
             return('pgname is ' + pgname)
         else:
-            return(dat)
+            return(fd.read())
 
     @cherrypy.expose
     @cherrypy.tools.json_out()
@@ -756,7 +687,7 @@ class StringGenerator(object):
             # communication (across a different network).
             # Right now, I have to check two sources, but eventually there will
             # be one shard table.
-            cmd = "SELECT shardsvr.shard_id_exists('%s');" % (shard_id)
+            cmd = "SELECT shardsvrdb.shard_id_exists('%s');" % (shard_id)
             rc, my_data, msg_d = shardfuncs.shard_sql_select(cur, cmd)
             if rc != 0:
                 cur.close()
@@ -838,19 +769,25 @@ class StringGenerator(object):
                 f = None
                 try:
                     f = open(shard_fname, 'wb')
-                    try:
-                        if isinstance(encrypted_data, bytes):
-                            # writing binary
-                            f.write(encrypted_data)
-                        else:
-                            f.write(bytes(encrypted_data, 'utf-8'))
-                    finally:
-                        if f.fileno():
-                            os.fsync(f.fileno())
-                        f.close()
-                except IOError:
+                except Exception:
                     raise RuntimeError(
-                        '9600: Failed to write the shard file.')
+                        '9600: Failed to open the shard file for writing.')
+
+                try:
+                    if isinstance(encrypted_data, bytes):
+                        # writing binary
+                        f.write(encrypted_data)
+                    else:
+                        f.write(bytes(encrypted_data, 'utf-8'))
+                except Exception:
+                    f.close()
+                    raise RuntimeError(
+                        '9605: Failed to write the shard to disk.')
+
+                if f.fileno():
+                    os.fsync(f.fileno())
+
+                f.close()
 
                 # The sql command wants the date in a an odd format,
                 # so do it here. PostgreSQL wants the date like this,
@@ -865,13 +802,18 @@ class StringGenerator(object):
 
                 # Note that the code here does not need
                 # to add quotes around the date values.
-                cmd = "INSERT INTO shardsvr.big_shards(" \
+                ## print('once test a %s' % shard_id )
+                ## print('once test b %s' % del_dt_sql)
+                ## print('once test c %s' %  expire_dt_sql)
+                ## print('once test d %s' %  str(cherrypy.config['shard_encrypt_version']))
+                ## print('once test e %s' %  day_code)
+                cmd = "INSERT INTO shardsvrdb.big_shards(" \
                     + "  big_shard_id, " \
                     + "  delete_db_entry_on_date, " \
                     + "  expire_on_date, " \
                     + "  encryption_format, " \
                     + "  day_code) " \
-                    + "values('%s', %s, %s, %d, '%s');" % ( shard_id, del_dt_sql, expire_dt_sql, cherrypy.config['shard_encrypt_version'], day_code)
+                    + "values('%s', %s, %s, %s, '%s');" % ( shard_id, del_dt_sql, expire_dt_sql, str(cherrypy.config['shard_encrypt_version']), day_code)
 
                 rc, msg_d = shardfuncs.shard_sql_insert(cur, cmd)
                 if rc != 0:
@@ -986,7 +928,7 @@ class StringGenerator(object):
         out = {}
         dbg = False
 
-        def _process_args(debug, nonce, shard_id, out):
+        def process_args(debug, nonce, shard_id, out):
             # Python seems to get the data type right, but
             # this might be safter than making assumptions.
             dbg = False
@@ -1017,10 +959,10 @@ class StringGenerator(object):
 
             return((dbg, out))
 
-        def _check_shard_status(CONN_STR, shard_id, conn, cur):
+        def check_shard_status(CONN_STR, shard_id, conn, cur):
             cmd = str("SELECT burned, expired, delete_db_entry_on_date, "
                 + "encryption_format, day_code "
-                + "FROM shardsvr.big_shards "
+                + "FROM shardsvrdb.big_shards "
                 + "WHERE  big_shard_id = '%s';" % (shard_id))
 
             my_data = None
@@ -1055,21 +997,15 @@ class StringGenerator(object):
                 # The shard was not found
                 return(None)
 
-        def _fetch_shard_data(shard_path, shard_id, status, conn, cur):
-            # RNCrypt_zero is a modified RNCryptor with no pbkdf2 iterations.
+        def fetch_shard_data(shard_path, shard_id, status, conn, cur):
             cryptor = shardfuncs.RNCrypt_zero()
             try:
                 f = open(shard_path + '/' + shard_id, 'rb')
-                try:
-                    dat_in = f.read()
-                finally:
-                    f.close()
-            except IOError:
+            except Exception:
                 cur.close()
                 conn.close()
                 raise RuntimeError(
                     '6900: Could not open the shard for reading.')
-
 
             if status['encryption_format'] == 1:
                 # Read the data and decrypt using the
@@ -1080,6 +1016,15 @@ class StringGenerator(object):
                 # shards with the new algo, and the olds ones
                 # will be processed with the old one, until
                 # the old ones are all gone in 5 or so days.
+                try:
+                    dat_in = f.read()
+                except Exception:
+                    cur.close()
+                    conn.close()
+                    f.close()
+                    raise RuntimeError('7000: Error reading the shard file.')
+
+                f.close()
 
                 try:
                     # The regular RNCryptor (in early 2015) expected str output
@@ -1097,16 +1042,17 @@ class StringGenerator(object):
                         + 'error, it could mean that you need to restore '
                         + 'my RNCryptor class redefinition.')
 
+                dat_in = None
+
             elif status['encryption_format'] == 0:
                 # We always use encryption, so this line should not run
-                big_data = dat_in
+                big_data = f.read()
+                f.close()
             else:
                 cur.close()
                 conn.close()
                 raise RuntimeError(
                     '7100: Unknown encryption format returned for this shard.')
-
-            dat_in = None
 
             if (big_data is None):
                 cur.close()
@@ -1117,7 +1063,7 @@ class StringGenerator(object):
                 return(big_data)
 
         # -  -- - - - -
-        def _burn_shard(shard_id, status, conn, cur):
+        def burn_shard(shard_id, status, conn, cur):
             """
             The shard has already been read, so set the burn flag.
 
@@ -1129,7 +1075,7 @@ class StringGenerator(object):
             #  2) erase the shard from disk.
             smd_data = None
             # Burn the shard using the shard_delete stored procedure:
-            cmd = "SELECT * FROM shardsvr.shard_burn('%s');" % (shard_id)
+            cmd = "SELECT * FROM shardsvrdb.shard_burn('%s');" % (shard_id)
             rc, smd_data, msg_d = shardfuncs.shard_sql_select(cur, cmd)
 
             if smd_data is None:
@@ -1158,7 +1104,7 @@ class StringGenerator(object):
             return(True)
 
             # -  -- - - - -
-        def _get_shard(CONN_STR, shard_id, out):
+        def get_shard(CONN_STR, shard_id, out):
             global SHARD_ROOT
 
             conn, msg_d = shardfuncs.shard_connect(CONN_STR)
@@ -1169,7 +1115,7 @@ class StringGenerator(object):
 
             cur = conn.cursor()
 
-            status = _check_shard_status(CONN_STR, shard_id, conn, cur)
+            status = check_shard_status(CONN_STR, shard_id, conn, cur)
             if status is None:
                 # The shard was not found.  I can not get it
                 raise RuntimeError('983855: Shard was not found (not '
@@ -1205,10 +1151,10 @@ class StringGenerator(object):
         #           This is the main part of this page generator
         #
         try:
-            dbg, out = _process_args(debug, nonce, shard_id, out)
-            big_data, status, conn, cur, out = _get_shard(
+            dbg, out = process_args(debug, nonce, shard_id, out)
+            big_data, status, conn, cur, out = get_shard(
                 CONN_STR, shard_id, out)
-            _burn_shard(shard_id, status, conn, cur)  # failures here are bad!
+            burn_shard(shard_id, status, conn, cur)  # failures here are bad!
 
             # RETURN THE DATA in binary format -- set headers first.
             # RETURN THE DATA in binary format -- set headers first.
@@ -1218,7 +1164,11 @@ class StringGenerator(object):
             if not isinstance(big_data, bytes):
                 big_data = bytes(big_data, 'utf-8')
         except Exception:
-            return(shardfuncs.nm_err_dict('shard_read', out=out))
+            rc = shardfuncs.nm_err_dict('shard_read')
+            # print('++ rc will be ' + str(rc))
+            cherrypy.response.headers['Content-Type'] = \
+                'application/json'
+            return(bytes(json.dumps(rc), 'utf-8'))
 
         return(big_data)
         # - - - -
@@ -1333,20 +1283,15 @@ class StringGenerator(object):
             # a 'mix id' as a file name:
             # MODIFY THIS TO GET A BLOCK AT A TIME AND STOP IF
             # THE FILE IS TOO BIG.
-            try:
-                f_in = shard_data.file
-                f = open('/var/natmsg/shards/' + mix_id, 'w')
-                try:
-                    f.write(f_in.read().decode('utf8'))
-                finally:
-                    if f.fileno():
-                        # sync to disk to be sure it is there
-                        os.fsync(f.fileno())
+            f_in = shard_data.file
+            f = open('/var/natmsg/shards/' + mix_id, 'w')
+            f.write(f_in.read().decode('utf8'))
+            if f.fileno():
+                # sync to disk to be sure it is there
+                os.fsync(f.fileno())
 
-                    f.close()
-                    f_in.close()
-            except IOError:
-                return({'remix_packet': {'status': 'Error', 'Error': 'Could not write shard'}})
+            f.close()
+            f_in.close()
 
         conn, msg_d = shardfuncs.shard_connect(CONN_STR)
         if conn is None:
@@ -1377,7 +1322,7 @@ class StringGenerator(object):
 
             # Note that the code here does not need to add
             # quotes around the date values.
-            cmd = "INSERT INTO shardsvr.big_shards(" \
+            cmd = "INSERT INTO shardsvrdb.big_shards(" \
             + "  big_shard_id, " \
             + "  delete_db_entry_on_date, " \
             + "  expire_on_date) " \
@@ -1439,8 +1384,8 @@ if __name__ == '__main__':
     # plus this version makes it harder for a generic
     # virus to see the real data.
     SHARD_PW_BYTES = pbkdf2_nm.pw_hash(
-            iterations=57137,
-            verify_fname='/var/natmsg/shard_server_receipt.save')
+						iterations=57137,
+            verify_fname='/var/natmsg/shard_server_receipt' + NM_VERSION_STRING + '.save')
     if SHARD_PW_BYTES is None:
         print('The shard password is bad.  Quitting now.')
         sys.exit(12)
@@ -1470,12 +1415,10 @@ if __name__ == '__main__':
     tst_fname = os.path.join(SHARD_ROOT, 'a', 'junktest.txt')
     try:
         fd = open(tst_fname, 'w')
-        try:
-            fd.write("This is a file to be sure that "
-                + "I can write to this directory")
-        finally:
-            fd.close()
-    except IOError:
+        fd.write(
+            "This is a file to be sure that I can write to this directory")
+        fd.close()
+    except Exception:
         print('Error. Could not write a test file to the shards directory:'
             + tst_fname)
         sys.exit(34)

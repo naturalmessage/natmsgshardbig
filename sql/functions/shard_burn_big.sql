@@ -1,4 +1,4 @@
--- shard_burn_big.sql contains function shardsvr.shard_burn_big
+-- shard_burn_big.sql contains function shardsvrdb.shard_burn_big
 
 -- This performs 'burn' of the shard data,, which means
 -- that any record of the content of the shard is erased.
@@ -11,9 +11,9 @@
 -- ----------------------------------------
 -- ----------------------------------------
 -- ----------------------------------------
-DROP FUNCTION IF EXISTS shardsvr.shard_burn_big(char(35));
+DROP FUNCTION IF EXISTS shardsvrdb.shard_burn_big(char(35));
 
-CREATE FUNCTION shardsvr.shard_burn_big(selected_shard_id char(35)) RETURNS int AS $$
+CREATE FUNCTION shardsvrdb.shard_burn_big(selected_shard_id char(35)) RETURNS int AS $$
 DECLARE
 rows_burned int;
 BEGIN
@@ -26,7 +26,7 @@ BEGIN
 	-- record was created.
 	-- If the record was  expired, do nothing, because it
 	-- has already been fixed
-	UPDATE shardsvr.big_shards
+	UPDATE shardsvrdb.big_shards
 	SET 
 		burned = true,
     expire_on_date = null

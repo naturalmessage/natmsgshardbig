@@ -2,7 +2,7 @@
 -- replace this and the new shard_delete_db_entries will kill database
 -- entries after 20 days or so.
 
--- shard_delete.sql contains function shardsvr.shard_delete
+-- shard_delete.sql contains function shardsvrdb.shard_delete
 
 -- This performs 'delete/burn' of the shard data, but does not 'expire' it.
 -- A shard 'expires' when the time has run out and it has not been read.
@@ -11,9 +11,9 @@
 -- ----------------------------------------
 -- ----------------------------------------
 -- ----------------------------------------
-DROP FUNCTION IF EXISTS shardsvr.shard_delete(char(35));
+DROP FUNCTION IF EXISTS shardsvrdb.shard_delete(char(35));
 
-CREATE FUNCTION shardsvr.shard_delete(selected_shard_id char(35)) RETURNS int AS $$
+CREATE FUNCTION shardsvrdb.shard_delete(selected_shard_id char(35)) RETURNS int AS $$
 DECLARE
 rows_deleted int;
 BEGIN
@@ -25,7 +25,7 @@ BEGIN
 	-- record was created.
 	-- If the record was  expired, do nothing, because it
 	-- has already been fixed
-	UPDATE shardsvr.shards
+	UPDATE shardsvrdb.shards
 	SET 
     shard = '\x0000000000000000000000000000000000000000',
 		burned = true,
@@ -39,5 +39,5 @@ END
 $$
 LANGUAGE 'plpgsql';
 --
---select shardsvr.shard_delete('SID0000000101234567890bcdef0123456789abcdef01234567201408081942678857797');
+--select shardsvrdb.shard_delete('SID0000000101234567890bcdef0123456789abcdef01234567201408081942678857797');
 

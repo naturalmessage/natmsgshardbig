@@ -1,4 +1,4 @@
--- shard_delete.sql contains function shardsvr.shard_delete_db-entries(),
+-- shard_delete.sql contains function shardsvrdb.shard_delete_db-entries(),
 -- which is used to remove database entries about 20 days they are created.
 --
 -- The main shard data will have been delete already, but the database
@@ -12,9 +12,9 @@
 -- ----------------------------------------
 -- ----------------------------------------
 -- ----------------------------------------
-DROP FUNCTION IF EXISTS shardsvr.shard_delete_db_entries();
+DROP FUNCTION IF EXISTS shardsvrdb.shard_delete_db_entries();
 
-CREATE FUNCTION shardsvr.shard_delete_db_entries() RETURNS 
+CREATE FUNCTION shardsvrdb.shard_delete_db_entries() RETURNS 
 TABLE (little_rows_deleted int, big_rows_deleted int)
 AS $$
 DECLARE
@@ -22,14 +22,14 @@ little_rows_deleted int;
 big_rows_deleted int;
 BEGIN
 
-	DELETE FROM shardsvr.shards
+	DELETE FROM shardsvrdb.shards
 	WHERE 
 		delete_db_entry_on_date < current_date;
 
 	GET DIAGNOSTICS little_rows_deleted = ROW_COUNT;
 
 	--
-	DELETE FROM shardsvr.big_shards
+	DELETE FROM shardsvrdb.big_shards
 	WHERE 
 		delete_db_entry_on_date < current_date;
 
@@ -42,5 +42,5 @@ $$
 LANGUAGE 'plpgsql';
 
 -- example:
--- select shardsvr.shard_expire('SID0000000101234567890bcdef0123456789abcdef01234567201408081942678857797');
+-- select shardsvrdb.shard_expire('SID0000000101234567890bcdef0123456789abcdef01234567201408081942678857797');
 

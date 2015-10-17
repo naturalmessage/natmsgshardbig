@@ -17,8 +17,8 @@
 -- in the future, but is not currently used.
 --
 -- 
---drop table shardsvr.shards;
-CREATE TABLE IF NOT EXISTS shardsvr.shards(
+--drop table shardsvrdb.shards;
+CREATE TABLE IF NOT EXISTS shardsvrdb.shards(
 shard_pkid               BIGSERIAL PRIMARY KEY,
 shard_id                 CHAR(35) NOT NULL,
 shard                    BYTEA NOT NULL,
@@ -32,40 +32,40 @@ encryption_format        INT DEFAULT 0 NOT NULL,
 last_accessed_yyyymmdd   DATE NOT NULL DEFAULT current_date,
 CHECK (length(shard)  < 600)
 );
-create unique index idx_shard_id on shardsvr.shards(shard_id);
+create unique index idx_shard_id on shardsvrdb.shards(shard_id);
 
 --++++++++++++++++++++++++++++++++++++++++++++
 --++++++++++++++++++++++++++++++++++++++++++++
 --++++++++++++++++++++++++++++++++++++++++++++
 --++++++++++++++++++++++++++++++++++++++++++++
 -- without schema privileges, non-superusers can do nothing.
-GRANT USAGE on SCHEMA shardsvr to shardwebserver;
-GRANT CONNECT ON database shardsvrdb TO shardwebserver;
+GRANT USAGE on SCHEMA shardsvrdb to shardwebserver;
+GRANT CONNECT ON database sharddb  TO shardwebserver;
 
 -- no access to email_blocked or email_blocked_sources?
-GRANT INSERT ON ALL TABLES IN SCHEMA shardsvr TO shardwebserver;
-GRANT UPDATE ON ALL TABLES IN SCHEMA shardsvr TO shardwebserver;
---GRANT SELECT ON ALL TABLES IN SCHEMA shardsvr TO shardwebserver;
-GRANT DELETE ON ALL TABLES IN SCHEMA shardsvr TO shardwebserver;
+GRANT INSERT ON ALL TABLES IN SCHEMA shardsvrdb TO shardwebserver;
+GRANT UPDATE ON ALL TABLES IN SCHEMA shardsvrdb TO shardwebserver;
+--GRANT SELECT ON ALL TABLES IN SCHEMA shardsvrdb TO shardwebserver;
+GRANT DELETE ON ALL TABLES IN SCHEMA shardsvrdb TO shardwebserver;
 
 -- this is access for the thing (function/process??) that
 -- will actually determine the seq numbers for the autonumbered
 -- serial.
-GRANT INSERT ON shardsvr.shards TO shardwebserver;
-GRANT UPDATE ON shardsvr.shards TO shardwebserver;
-GRANT SELECT ON shardsvr.shards TO shardwebserver;
-GRANT DELETE ON shardsvr.shards TO shardwebserver;
+GRANT INSERT ON shardsvrdb.shards TO shardwebserver;
+GRANT UPDATE ON shardsvrdb.shards TO shardwebserver;
+GRANT SELECT ON shardsvrdb.shards TO shardwebserver;
+GRANT DELETE ON shardsvrdb.shards TO shardwebserver;
 
 
 -- this is access for the thing (function/process??) that
 -- will actually determine the seq numbers for the autonumbered
 -- serial.
-GRANT USAGE, SELECT ON SEQUENCE shardsvr.shards_shard_pkid_seq  TO shardwebserver;
+GRANT USAGE, SELECT ON SEQUENCE shardsvrdb.shards_shard_pkid_seq  TO shardwebserver;
 
 
 -- show the tables
---\dt shardsvr.*
+--\dt shardsvrdb.*
 
 --show permissions for the msg table
---\dp shardsvr.*
+--\dp shardsvrdb.*
 
