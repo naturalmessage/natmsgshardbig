@@ -84,6 +84,7 @@ DSTAMP=`date +"%Y%m%d%H%M%S"`
 SOURCE_DIR=$(pwd)
 iface='eth0'
 
+PYTHON3_PGM=/usr/bin/python3
 PGUSER_HOME='/var/lib/postgresql'  # on centOS, I use /home/postgres
 SHARD_DIR="${PGUSER_HOME}/shardsvr/"
 PGSQL_DATA='/var/lib/postgresql/9.4/main' #debian
@@ -147,6 +148,20 @@ if [ ! -d /root/noarch ]; then
 	mkdir -p /root/noarch
 fi
 cd /root/noarch
+
+
+apt-get -y install debian-keyring
+
+# for pscopg 2.6.1
+gpg --keyserver pgp.mit.edu --recv-keys 6013BD3AFCF957DE
+gpg --armor --export 6013BD3AFCF957DE| apt-key add -
+
+# for linode
+gpg --keyserver pgp.mit.edu --recv-keys C697D823EB0AB654
+gpg --armor --export C697D823EB0AB654| apt-key add -
+
+
+
 
 apt-get -y install vim lynx screen rsync | tee -a "${LOG_FNAME}"
 apt-get -y install curl wget  | tee -a "${LOG_FNAME}" # needed for installs
@@ -331,7 +346,7 @@ fi
 # Python 3 from source seems to be needed for Debian 7 because
 # the builtin _ssl lib did not have TLS_1_2.
 #
-apt-get -y install python3 | tee -a "${LOG_FNAME}"
+apt-get -y install python3-dev | tee -a "${LOG_FNAME}"
 apt-get -y install python3-openssl | tee -a "${LOG_FNAME}"
 ### read -p "Do you want to install Python3 from source? (y/n): " MENU_CHOICE
 ### case $MENU_CHOICE in
@@ -407,7 +422,7 @@ if [	"${MENU_CHOICE}" = "y" ]; then
 	fi
 	cd /root/noarch
 	wget https://bootstrap.pypa.io/ez_setup.py
-	python3 ez_setup.py
+	${PYTHON3_PGM} ez_setup.py
 fi
 
 ################################################################################
@@ -562,7 +577,6 @@ if [	"${MENU_CHOICE}" = "y" ]; then
 		mkdir -p /root/noarch
 	fi
 	cd /root/noarch
-	#wget https://pypi.python.org/packages/source/p/psycopg2/psycopg2-2.5.3.tar.gz#md5=09dcec70f623a9ef774f1aef75690995
 	wget https://pypi.python.org/packages/source/p/psycopg2/psycopg2-${PSYCOPG_VER}.tar.gz
 	wget https://pypi.python.org/packages/source/p/psycopg2/psycopg2-${PSYCOPG_VER}.tar.gz.asc # sig
 	
@@ -574,17 +588,26 @@ if [	"${MENU_CHOICE}" = "y" ]; then
 	### 	read -p "..." junk
 	### fi
 	
-	### # PGP but I don't have the pubic key
-	### gpg --verify psycopg2-2.5.4.tar.gz.asc psycopg2-2.5.4.tar.gz
+	# Verify PGP signature.  Requires the apt-key add command at the top
+	# to fetch the particular key that signed this
+	gpg --verify psycopg2-${PSYCOPG_VER}.tar.gz.asc psycopg2-${PSYCOPG_VER}.tar.gz
 	
-	# for libpq-fe.h, install the devel version of libpqxx
-	apt-get -y install libpqxx3-dev | tee -a "${LOG_FNAME}"
-	gunzip psycopg2-2.5.4.tar.gz | tee -a "${LOG_FNAME}"
-	tar -xf psycopg2-2.5.4.tar | tee -a "${LOG_FNAME}"
-	cd psycopg2-2.5.4 | tee -a "${LOG_FNAME}"
-	# You must run the correct python3 executable.  There might
-	# be an old verion in /usr/bin.
-	/usr/local/bin/python3 setup.py	install | tee -a "${LOG_FNAME}"
+
+  cd /root/noarch
+  apt-get -y install libpqxx3-dev | tee -a "${LOG_FNAME}"
+  gunzip psycopg2-${PSYCOPG_VER}.tar.gz | tee -a "${LOG_FNAME}"
+  tar -xf psycopg2-${PSYCOPG_VER}.tar | tee -a "${LOG_FNAME}"
+  cd /root/noarch/psycopg2-${PSYCOPG_VER}
+
+  echo "my directory is `pwd`" | tee -a "${LOG_FNAME}"
+
+  # You must run the correct python3 executable.  There might
+  # be an old verion in /usr/bin.
+  "${PYTHON3_PGM}" ./setup.py install | tee -a "${LOG_FNAME}"
+  if [ $? != 0 ]; then
+    echo "Failed to install psycopg2, which is required for CherryPy to access the database."
+    exit 8478
+  fi
 	
 fi
 # end of postgres install
@@ -594,7 +617,7 @@ fi
 ############################################################
 ############################################################
 # see if cherrypy is installed
-python3 -c 'import cherrypy'
+${PYTHON3_PGM} -c 'import cherrypy'
 
 if [ $? = 0 ]; then
 	echo "Cherrypy is installed"
@@ -615,7 +638,7 @@ fi
 # I will ship this #curl -L --url https://github.com/RNCryptor/RNCryptor-python/raw/master/RNCryptor.py > /var/natmsg/RNCryptor.py
 # I will ship this #chmod 644 RNCryptor.py
 
-python3 -c 'import Crypto'
+${PYTHON3_PGM} -c 'import Crypto'
 
 if [ $? = 0 ]; then
 	echo "The python Crypto library is already installed."
@@ -631,14 +654,18 @@ else
 	fi
 	cd /root/noarch
 	
-	curl -L --url https://ftp.dlitz.net/pub/dlitz/crypto/pycrypto/pycrypto-2.6.1.tar.gz > /root/noarch/pycrypto.tar.gz
+	curl -L --url https://ftp.dlitz.net/pub/dlitz/crypto/pycrypto/pycrypto-${PSYCOPG_VER}.tar.gz > /root/noarch/pycrypto.tar.gz
 	
 	cd /root/noarch
 	gunzip /root/noarch/pycrypto.tar.gz
 	tar -xf /root/noarch/pycrypto.tar
 	crypto_dir=$(ls -d pycrypto-* |sort -r|head -n 1)
 	cd "${crypto_dir}"
-	python3 setup.py install
+	${PYTHON3_PGM} setup.py install
+	if [ $? != 0 ]; then
+		echo "Failed to build the Crypto library (do you have python.h from the python3-dev package?)"
+	  exit 8473
+	fi
 fi
 
 ###############################################################################
@@ -1071,7 +1098,7 @@ clear
 echo "The first part of the installation is finished." | tee -a "${LOG_FNAME}"
 echo "The next (final) step will install files unique to "
 echo "the shard server (as opposed to the directory server)."
-if confirm(); then
+if (confirm()); then
 	echo "Continuing."
 else
 	echo "quitting now."
