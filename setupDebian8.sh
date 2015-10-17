@@ -137,39 +137,39 @@ if [ ! -d /root/noarch ]; then
 fi
 cd /root/noarch
 
-apt-get install vim lynx screen rsync
-apt-get install curl wget # needed for installs
-apt-get install fail2ban
+apt-get -y install vim lynx screen rsync
+apt-get -y install curl wget # needed for installs
+apt-get -y install fail2ban
 
 # apps needed to install and compile the Natural Message server 
 # verification C programs.
-apt-get install gcc
-apt-get install make
+apt-get -y install gcc
+apt-get -y install make
 echo "bzip2 (bz2) with C headers is needed for the libgcrypt install."
-#apt-get install bzip2-devel
+#apt-get -y install bzip2-devel
 apt-get source bzip2
 #
 #
 # Devel headers needed for pyOpenssl to tet TLS_1_2
-#apt-get install openssl
-apt-get install dpkg-dev
+#apt-get -y install openssl
+apt-get -y install dpkg-dev
 apt-get source openssl
 #
-# apt-get install lib${ARCHBITS}ncurses5-dev
+# apt-get -y install lib${ARCHBITS}ncurses5-dev
 
-apt-get install zlib1g-dev
+apt-get -y install zlib1g-dev
 
 apt-get source lib${ARCHBITS}ncurses5-dev
-# apt-get install sqlite3
+# apt-get -y install sqlite3
 apt-get source sqlite3
 
-#apt-get install readline
+#apt-get -y install readline
 apt-get source readline
 
-#apt-get install libpcap
+#apt-get -y install libpcap
 apt-get source libpcap
 
-# apt-get install xz-utils
+# apt-get -y install xz-utils
 apt-get source xz-utils
 
 ################################################################################
@@ -300,7 +300,7 @@ fi
 
 
 # ntpdate will disappear, but it works for now
-apt-get install ntpdate
+apt-get -y install ntpdate
 # sync the time
 ntpdate 2.fedora.pool.ntp.org
 
@@ -324,8 +324,8 @@ fi
 # Python 3 from source seems to be needed for Debian 7 because
 # the builtin _ssl lib did not have TLS_1_2.
 #
-apt-get install python3
-apt-get install python3-openssl
+apt-get -y install python3
+apt-get -y install python3-openssl
 ### read -p "Do you want to install Python3 from source? (y/n): " MENU_CHOICE
 ### case $MENU_CHOICE in
 ### 	'n'|'N')
@@ -460,10 +460,10 @@ if [	"${MENU_CHOICE}" = "y" ]; then
 	# Install PostgreSQL
 	#
 	##yum -y install postgresql-server postgresql-libs	postgresql-contrib postgresql-plpython
-	apt-get install postgresql-server-dev-all
-	apt-get install postgresql postgresql-client
+	apt-get -y install postgresql-server-dev-all
+	apt-get -y install postgresql postgresql-client
 	apt-get source postgresql-server-dev-all
-	apt-get install pgp # for verification of downloaded files.
+	apt-get -y install pgp # for verification of downloaded files.
 	
 	echo  ""
 	echo "When prompted, enter the password for the postgres user ID"
@@ -478,7 +478,7 @@ if [	"${MENU_CHOICE}" = "y" ]; then
 	echo "put the SQL stuff for Natural Message there."
 	echo ""
 	echo "The default data directory for the PostgreSQL database using the Debian"
-	echo "apt-get install is:"
+	echo "apt-get -y install is:"
 	echo "   ${PGSQL_DATA}"
 	echo "(Note that on my other setup the 'main' dir is called 'data'.)"
 	echo ""
@@ -571,7 +571,7 @@ if [	"${MENU_CHOICE}" = "y" ]; then
 	### gpg --verify psycopg2-2.5.4.tar.gz.asc psycopg2-2.5.4.tar.gz
 	
 	# for libpq-fe.h, install the devel version of libpqxx
-	apt-get install libpqxx3-dev
+	apt-get -y install libpqxx3-dev
 	gunzip psycopg2-2.5.4.tar.gz
 	tar -xf psycopg2-2.5.4.tar
 	cd psycopg2-2.5.4
@@ -595,11 +595,11 @@ else
 	echo "Cherrypy is not installed.  Installing now."
 	# Debian 8 has a package for python3-cherrypy3 that should
 	# simplify the install.  The old Debian 7 installed from source.
-    apt-get install python3-cherrypy3
+    apt-get -y install python3-cherrypy3
 	#
 	#
  	### I need the mercurial VCS to get the source
-	## apt-get install mercurial 
+	## apt-get -y install mercurial 
 	############################################################
 	############################################################
 	
@@ -650,12 +650,12 @@ fi
 #															OpenSSL for CherryPy
 ## The SSL certs can not have a password, so put them
 ## in an ecryptfs directory
-# apt-get install ecryptfs-utils gettext
+# apt-get -y install ecryptfs-utils gettext
 
 # install libffi with headers:
-apt-get install libffi-dev
+apt-get -y install libffi-dev
 
-apt-get install python3-openssl
+apt-get -y install python3-openssl
 #
 # This is the old debian 7 routine:
 ## ##  # The built-in version of the python ssl lib in Debian7 did not have tls 1.2
@@ -779,7 +779,7 @@ fi
 ##
 ## This was installed from source in Debian 7, now there is a package:
 
-apt-get install python3-requests
+apt-get -y install python3-requests
 #### old debian 7 version
 ### if [  "${MENU_CHOICE}" = "y" ]; then
 ###   cd /root/noarch
