@@ -21,7 +21,7 @@
 ################################################################################
 
 echo "STOP!! You should be running this inside of screen or tmux."
-read -p "Press ENTER to continue or CTL-c to quit..."
+read -p "Press ENTER to continue or CTL-c to quit..." junk
 
 ################################################################################
 # Finding packages on Debian:
@@ -34,7 +34,7 @@ confirm(){
   local yn=''
   local MY_PROMPT="$1"
   if (test -z "${MY_PROMPT}"); then
-    local MY_PROMPT="${MSG_CONTINUE}"
+    local MY_PROMPT="Do you want to continue? (y/n): "
   fi
   while (test "${tmp_FIN}" = "N"); do
     read -p "$MY_PROMPT" yn
@@ -76,7 +76,7 @@ echo ""
 ## old deb 7 # echo "I think I have to compile Python 3 from source AFTER I get"
 ## old deb 7 # echo "the openssl install ready.  The _ssl library under"
 ## old deb 7 # echo "ssl.py seems to require a python rebuild."
-read -p  "Press ENTER t ocontinue or Ctl-c to quit." junk
+read -p  "Press ENTER to continue or Ctl-c to quit." junk
 ################################################################################
 #                     CHECK EACH OF THESE OPTIONS
 #
@@ -427,6 +427,8 @@ fi
 
 ################################################################################
 ############################################################
+echo "I will now test for the existence of shard svr python programs."
+echo "Don't worry about the message that naturalmsg_shard is missing."
 chk_natmsg=$(ls /var/natmsg/naturalmsg_shard*| grep naturalmsg|head -n 1)
 
 if [ -z "${chk_natmsg}" ]; then
@@ -455,6 +457,7 @@ if [ -z "${chk_natmsg}" ]; then
 		cd natmsgshardbig-master
 		chown natmsg:natmsg *
 		cp * /var/natmsg
+	  cp -vR sql "${SHARD_DIR}"
 	fi
 fi
 ############################################################
@@ -1098,7 +1101,7 @@ clear
 echo "The first part of the installation is finished." | tee -a "${LOG_FNAME}"
 echo "The next (final) step will install files unique to "
 echo "the shard server (as opposed to the directory server)."
-if (confirm()); then
+if confirm; then
 	echo "Continuing."
 else
 	echo "quitting now."
@@ -1155,19 +1158,18 @@ else
 	fi
 fi
 
-echo "checkpoint ccc"
+echo "I will now check for the existence of the shard server database:"
 db_existence=$(sudo -u postgres psql  -c '\q' ${DBNAME})
 if [ $? = 0 ]; then
 	echo "The shardsvrdb database exists"
 else
 	echo "I did not find the shardsvrdb.  I will create it now"
-	cd "${SHARD_DIR}"
+	cd "${SHARD_DIR}/sql"
 	sudo -u postgres  ./0002create_db.sh
+	echo "==== Finished 0002create_db.sh"
 fi
 
-echo "checkpoint ddd"
-
-cd "${SHARD_DIR}"
+cd "${SHARD_DIR}/sql"
 db_existence=$(sudo -u postgres psql -c '\q'  ${DBNAME})
 if [ $? != 0 ]; then
 	echo "Error. Failed to create the shardsvrdb database."
@@ -1181,14 +1183,14 @@ chk_shard=$(sudo -u postgres psql \
 # sudo -u postgres psql -c '\d shardsvr.big_shards' ${DBNAME} |grep big_shard_pkid|tail -n 1
 
 if [ -z "${chk_shard}" ]; then
-    ### # I do not see a shard table, so I should install the shard tables:
-    ### 	if [ -f "${SHARD_DIR}/sql/0002create_db.sql" ]; then
-    ### 		cd "${SHARD_DIR}/sql"
-    ### 		sudo -u postgres psql  -c "\i 0002create_tables.sql" "${DBNAME}"
-    ### 	fi
-    ### 
-    ### # 
 	clear
+  echo "I do not see a shard table, so I will install the shard tables."
+  ### 	if [ -f "${SHARD_DIR}/sql/0002create_db.sql" ]; then
+  ### 		cd "${SHARD_DIR}/sql"
+  ### 		sudo -u postgres psql  -c "\i 0002create_tables.sql" "${DBNAME}"
+  ### 	fi
+  ### 
+  ### # 
 	# Get a password to initialize the database, save it in 0010once.sql
 	##read -s -p "Enter a new password for the database: " NEW_DB_PW
 	read -p "Enter a new password for the database: " NEW_DB_PW
@@ -1199,21 +1201,22 @@ if [ -z "${chk_shard}" ]; then
 	cat "${SHARD_DIR}/sql/0010once.sql"|grep pass
 	echo "Check the line above. If you alread have the database password " \
 		"in 0010setup.sql"
-	echo -n "Do you want to initialize the database for "
-	read -p "the shard server? (y/n): " MENU_CHOICE
-	case $MENU_CHOICE in
-		'n'|'N')
-			MENU_CHOICE='n';;
-		'y'|'Y')
-			MENU_CHOICE='y';;
-	esac
-	
-	if [	"${MENU_CHOICE}" = "y" ]; then
+	if confirm "Do you want to create the shardsvrdb tables? (y/n): "; then
 		cd "${SHARD_DIR}/sql"
 		sudo -u postgres psql -c '\i 0010once' "${DBNAME}"
 		sudo -u postgres psql -c '\i 0015shard_server.sql' "${DBNAME}"
 		sudo -u postgres psql -c '\i 0016shard_server_big.sql' "${DBNAME}"
-        #shred -u 0010once  #remove the temp file with pw
+		sudo -u postgres psql -c '\i functions/scan_shard_delete.sql' "${DBNAME}"
+		sudo -u postgres psql -c '\i functions/shard_burn.sql' "${DBNAME}"
+		sudo -u postgres psql -c '\i functions/shard_delete.sql' "${DBNAME}"
+		sudo -u postgres psql -c '\i functions/shard_expire.sql' "${DBNAME}"
+		sudo -u postgres psql -c '\i functions/sysmon010.sql' "${DBNAME}"
+		sudo -u postgres psql -c '\i functions/shard_burn_big.sql' "${DBNAME}"
+		sudo -u postgres psql -c '\i functions/shard_delete_db_entries.sql' "${DBNAME}"
+		sudo -u postgres psql -c '\i functions/shard_expire_big.sql' "${DBNAME}"
+		sudo -u postgres psql -c '\i functions/shard_id_exists.sql' "${DBNAME}"
+
+    #shred -u 0010once  #remove the temp file with pw
 	fi
 else
 	echo "I am not installing the shard server tables because I already " \

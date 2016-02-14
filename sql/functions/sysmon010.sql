@@ -1,11 +1,11 @@
 -- sysmon010.sql
 --
 -- This version is for shard servers as opposed 
--- to directory servers.  The schema is 'shardsvr'.
+-- to directory servers.  The schema is 'shardsvrdb'.
 --
-drop function IF EXISTS shardsvr.sysmon001();
+drop function IF EXISTS shardsvrdb.sysmon001();
 
-CREATE FUNCTION shardsvr.sysmon001() RETURNS int
+CREATE FUNCTION shardsvrdb.sysmon001() RETURNS int
 AS $$
 DECLARE
 tmp_int int;
@@ -13,15 +13,15 @@ rows_added int;
 dt timestamp;
 BEGIN
 dt = current_timestamp;
-INSERT INTO shardsvr.sysmon_rec_counts
+INSERT INTO shardsvrdb.sysmon_rec_counts
 	(
 			big_shards               ,
 			shards                   ,
 			sysmon_rec_counts_dt
 	)
 	VALUES( 
-    (select count(*) from shardsvr.big_shards), 
-    (select count(*) from shardsvr.shards),
+    (select count(*) from shardsvrdb.big_shards), 
+    (select count(*) from shardsvrdb.shards),
     dt
 	);
 	GET DIAGNOSTICS rows_added = ROW_COUNT;
@@ -31,9 +31,9 @@ END
 $$
 LANGUAGE 'plpgsql';
 
-\df shardsvr.sysmon001
+\df shardsvrdb.sysmon001
 -- run it
---select shardsvr.sysmon001(13); 
+--select shardsvrdb.sysmon001(13); 
 
---SELECT C.smd_id AS smd_id FROM shardsvr.smd_read_transactions AS B, shardsvr.smd_read_transaction_data AS C WHERE B.smd_read_pkid = 13 AND B.smd_read_pkid = C.smd_read_pkid;
+--SELECT C.smd_id AS smd_id FROM shardsvrdb.smd_read_transactions AS B, shardsvrdb.smd_read_transaction_data AS C WHERE B.smd_read_pkid = 13 AND B.smd_read_pkid = C.smd_read_pkid;
 
