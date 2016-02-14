@@ -1,5 +1,9 @@
 # naturalmsg_shardsvr_00_00_20.py
 #
+
+# run this like the following to use the conf file in conf/shard05.conf
+# : sudo -u natmsg python3 naturalmsg_shardsvr_00_00_20.py conf=/var/natmsg/conf/shard05.conf
+#
 # to do: add pep8 to setupDebian.sh
 # debian 8 conf file location for postgre: /etc/postgresql/9.4/main/postgresql.conf
 # for debian 8, you might have to edit the postgres conf file to enable logging 
@@ -142,6 +146,14 @@ if test_or_prod not in ('test', 'prod', 'exp'):
     print('Error. "test_or_prod" must be one of test, prod, exp.')
     sys.exit(12)
 
+# override the config file if there is a command line opt
+if len(sys.argv) > 1:
+    conf_arg = sys.argv[1].split('=')
+    if len(conf_arg) > 0:
+        if conf_arg[0] == 'conf':
+            cp_config_fname =  conf_arg[1]
+            print("Using config file specified on the command-line: " + cp_config_fname)
+
 
 def fail_if_not_exist(
         fname,
@@ -253,8 +265,7 @@ def load_config():
         }
     }
 
-    cp_id_fname = cherrypy.config['natmsg_root'] + os.sep \
-        + 'cp_shard_' + NM_VERSION_STRING + '.pid'
+    cp_id_fname = cherrypy.config['PIDFILE']
 
     # server pidfile (this registers the ID number of the running
     # instance as shown in 'ps -A' terminal command).
@@ -329,12 +340,14 @@ def load_config():
 
     crontab_msg = '=========================================================' \
         + os.linesep \
+		+ 'The crontab root from the option file: ' + CRONTAB_ROOT \
+        + os.linesep \
         + 'Error.  You must schedule the housekeeping_shardsvr.py' \
         + 'file under the natmsg ID for crontab.  This program will ' \
         + 'delete old, unread shards when they expire.  You have to ' \
         + 'verify the correct path to the python3 program and to the ' \
         + 'housekeeping program, but the general format is: ' + os.linesep \
-        + 'sudo -u natmsg crontabe -e' + os.linesep \
+        + 'sudo -u natmsg crontab -e' + os.linesep \
         + '* 2 * * * /usr/local/bin/python3 ' \
         + '/var/natmsg/housekeeping_shardsvr.py'
     if not os.path.isfile(os.path.join(CRONTAB_ROOT, 'natmsg')):
@@ -386,7 +399,7 @@ def load_config():
     conn, msg_d = shardfuncs.shard_connect(CONN_STR)
     if conn is None:
         print('Error. Could not connect to the datase.  Is it Running?  '
-            + 'Try running /root/psqlgo.sh for '
+            + 'Try running /root/psqlgoDeb8.sh for '
             + 'the natural message start script.')
         sys.exit(15)
     else:
@@ -1384,7 +1397,7 @@ if __name__ == '__main__':
     # plus this version makes it harder for a generic
     # virus to see the real data.
     SHARD_PW_BYTES = pbkdf2_nm.pw_hash(
-						iterations=57137,
+                        iterations=57137,
             verify_fname='/var/natmsg/shard_server_receipt' + NM_VERSION_STRING + '.save')
     if SHARD_PW_BYTES is None:
         print('The shard password is bad.  Quitting now.')
