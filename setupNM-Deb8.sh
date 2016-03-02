@@ -1,7 +1,7 @@
 #!/bin/sh
 
 ################################################################################
-# Copyright 2015 Natural Message, LLC.
+# Copyright 2015-2016 Natural Message, LLC.
 # Author: Robert Hoot (naturalmessage@fastmail.fm)
 #
 # This file is part of the Natural Message Shard Server.
@@ -19,9 +19,14 @@
 # You should have received a copy of the GNU General Public License
 # along with Natural Message Shard Server.  If not, see <http://www.gnu.org/licenses/>.
 ################################################################################
+# Note: if you are installing this on a Rasberry Pi that runs the Raspbian
+# OS, you should first read and run the pisetup.sh script in this directory.
+################################################################################
 
 apt-get -y install screen
 
+echo "This is a setup for the shard main server (directory server)"
+echo "for Debian 8."
 echo
 echo
 echo "STOP!! You should be running this inside of screen or tmux."
@@ -59,16 +64,7 @@ confirm(){
 
 ################################################################################
 
-echo "This is a setup for the shard main server (directory server)"
-echo "for Debian 8."
-echo
-echo "TO DO - GET THE NMSIGN STUFF."
-echo "put shortcut urls to github stuff here."
-echo "Double check the --prefix=/usr/local for libgcrypt compile"
-echo "'make' the natmsgv and copy nm_verify and nm_sign to /var/natmsg"
-
-echo "Before continuing, you should probably run this under the 'screen'"
-echo "program so that you can go to the other screen to run a few commands."
+echo "Note if you run this in the future after Debian 8 is old..."
 echo "You might have to update /etc/apt/sources.list to add a line that"
 echo "starts with 'deb-src' (with a url), then run:"
 echo "deb-src http://http.us.debian.org/debian stable main"
@@ -76,12 +72,12 @@ echo "##deb-src http://non-us.debian.org/debian-non-US stable/non-US main contri
 echo "   sudo apt-get update "
 echo "See https://wiki.debian.org/SourcesList"
 echo ""
-## old deb 7 # echo "I think I have to compile Python 3 from source AFTER I get"
-## old deb 7 # echo "the openssl install ready.  The _ssl library under"
-## old deb 7 # echo "ssl.py seems to require a python rebuild."
 read -p  "Press ENTER to continue or Ctl-c to quit." junk
 ###############################################################################
 clear
+echo "A wired network is best (e.g., plug your computer into the back of your"
+echo "wifi router using an Ethernet cable)."
+echo
 echo "For Raspbian (Debian 8) users, if you are using wifi, you will probably want to specify the interface as:"
 echo "   wlan0"
 echo "but if you use a wired network, you should probably say:"
@@ -260,7 +256,7 @@ if [    "${INSTALL_BASICS}" = "y" ]; then
     #
     # for the pythong command-line client, needed for testing the servers
     apt-get install -y unrtf
-
+    #
     # Devel headers needed for pyOpenssl to tet TLS_1_2
     #apt-get -y install openssl
     apt-get -y install dpkg-dev | tee -a "${LOG_FNAME}"
