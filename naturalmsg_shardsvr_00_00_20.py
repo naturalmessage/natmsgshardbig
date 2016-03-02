@@ -2,7 +2,7 @@
 #
 
 # run this like the following to use the conf file in conf/shard05.conf
-# : sudo -u natmsg python3 naturalmsg_shardsvr_00_00_20.py conf=/var/natmsg/conf/shard05.conf
+# : sudo  python3 naturalmsg_shardsvr_00_00_20.py conf=/var/natmsg/conf/shard05.conf
 #
 # to do: add pep8 to setupDebian.sh
 # debian 8 conf file location for postgre: /etc/postgresql/9.4/main/postgresql.conf
