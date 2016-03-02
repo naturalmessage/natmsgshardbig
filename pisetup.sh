@@ -8,12 +8,22 @@
 #    .screenrc, .vimrc, .bash_profile, .profile
 # 3) put this in my naturalmessage github.
 ###############################################################################
+# Misc notes:
+#
+# The initial user id for Raspbian 8 is pi and the password is password.
+#
 # The default Raspbian keyboard is for the UK, so here are a few key
 # if you have a U.S. keyboard.  (note that I change keyboard layout below).
 #               Key  | Produces
 #             slash    #
 #   right-alt tilde    | 
 #
+#
+# When I used dd to put the initial boot image on the SD card, 
+# I used parted to expand the size of the partition, then in this script,
+# the file system is expanded to fill the partition.
+#
+###############################################################################
 ################################################################################
 # Miscellaneous functions
 DSTAMP=`date +"%Y%m%d%H%M%S"`
@@ -43,12 +53,6 @@ confirm(){
 }
 
 ################################################################################
-###############################################################################
-# When I used dd to put the initial boot image on the SD card, 
-# I used parted to expand the size of the partition.
-
-# The initial user id is pi and the password is password.
-###############################################################################
 # ON FIRST LOGIN, ADD A NEW USER, GIVE IT ROOT PRIV, SET THE ROOT PW!!!
 
 echo "########################################################################"
