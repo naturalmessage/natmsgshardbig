@@ -21,7 +21,16 @@
 ################################################################################
 # Note: if you are installing this on a Rasberry Pi that runs the Raspbian
 # OS, you should first read and run the pisetup.sh script in this directory.
-################################################################################
+############################################################################
+ping -c 4 yahoo.com
+if [ $? = 0 ]; then
+    echo "It looks like you can reach the Internet."
+else
+    clear
+    echo "Warning: It looks like you can not reach the Internet."
+    echo "Press Ctl-C to quit and fix your Internet connection,"
+    read -p echo "else press ENTER to continue..." junk
+fi
 
 apt-get -y install screen
 
@@ -255,7 +264,7 @@ if [    "${INSTALL_BASICS}" = "y" ]; then
     apt-get source bzip2 | tee -a "${LOG_FNAME}"
     #
     # for the pythong command-line client, needed for testing the servers
-    apt-get install -y unrtf
+    apt-get -y install unrtf
     #
     # Devel headers needed for pyOpenssl to tet TLS_1_2
     #apt-get -y install openssl
@@ -520,16 +529,18 @@ chk_natmsg=$(ls /var/natmsg/naturalmsg_shard*| grep naturalmsg|head -n 1)
         fi
         cd /root/noarch
 
-				# The max-time and retries options are set to facilitate transfer
-				# across a slow connection.
-        curl -L --max-time 900 --retry 5 --retry-delay 60 --url https://github.com/naturalmessage/natmsgshardbig/archive/master.tar.gz -o natmsgshardbig.tar.gz
+                # The max-time and retries options are set to facilitate transfer
+                # across a slow connection.
+        curl -L --max-time 900 --retry 5 --retry-delay 60 \
+            --url https://github.com/naturalmessage/natmsgshardbig/archive/master.tar.gz -o natmsgshardbig.tar.gz
+
           if [ $? != 0 ]; then
             echo "Error, the download of the shard server python stuff failed."
             read -p "Press ENTER to continue or CTL-c to quit..." junk
         else
             gunzip natmsgshardbig.tar.gz
             tar -xf natmsgshardbig.tar
-          if [ $? != 0 ]; then
+            if [ $? != 0 ]; then
                 echo "Error. Failed to un-tar the shard server python stuff."
                 read -p "Press ENTER to continue or CTL-c to quit..." junk
             else
@@ -537,11 +548,11 @@ chk_natmsg=$(ls /var/natmsg/naturalmsg_shard*| grep naturalmsg|head -n 1)
                 chown natmsg:natmsg *
                 cp * /var/natmsg
                 cp -vR sql "${SHARD_DIR}"
-						    if [ ! -f ${SHARD_DIR}/sql/0002create_db.sh ]; then
-									echo "Error.	I do not see the 0002create_db.sh file in the expected place."
-									echo "This means that the Nat Msg database will not be set up properly."
-                	read -p "Press ENTER to continue or CTL-c to quit..." junk
-						    fi
+                if [ ! -f ${SHARD_DIR}/sql/0002create_db.sh ]; then
+                    echo "Error.    I do not see the 0002create_db.sh file in the expected place."
+                    echo "This means that the Nat Msg database will not be set up properly."
+                    read -p "Press ENTER to continue or CTL-c to quit..." junk
+                fi
             fi
         fi
     fi
