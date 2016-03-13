@@ -380,7 +380,7 @@ gshc_is_root(){
         # The system defines $EUID, which is the effective user,
         # which would reflect any 'su' or 'sudo' commands, 
         # if they are active.
-        if [ "$EUID" = "0" ]; then
+        if [ "$EUID" == "0" ]; then
             return 0
         else
             # not root

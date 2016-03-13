@@ -208,7 +208,7 @@ esac
 
 #
 INSTALL_GPG_ERROR='n'
-read -p "Do you want to compile gpg-error (required before libgcrypt)? " \
+read -p "Do you want to compile gpg-error (required before libgcrypt)? (y/n): " \
     INSTALL_GPG_ERROR
 case $INSTALL_GPG_ERROR in
     'n'|'N')
@@ -219,13 +219,23 @@ esac
 
 #
 COMPILE_LIBGCRYPT='n'
-read -p "Do you want to compile libgcrypt? " COMPILE_LIBGCRYPT
+read -p "Do you want to compile libgcrypt? (y/n): " COMPILE_LIBGCRYPT
 case $COMPILE_LIBGCRYPT in
     'n'|'N')
         COMPILE_LIBGCRYPT='n';;
     'y'|'Y')
         COMPILE_LIBGCRYPT='y';;
 esac
+
+IPTABLES_SETUP='n'
+read -p "Do you want to set up IPTABLES rults for the shard server (one-time setup)? (y/n): " IPTABLES_SETUP
+case $COMPILE_LIBGCRYPT in
+    'n'|'N')
+        COMPILE_LIBGCRYPT='n';;
+    'y'|'Y')
+        COMPILE_LIBGCRYPT='y';;
+esac
+
 ################################################################################
 
 apt-get update && apt-get upgrade
@@ -254,6 +264,8 @@ if [    "${INSTALL_BASICS}" = "y" ]; then
     apt-get -y install vim lynx screen rsync | tee -a "${LOG_FNAME}"
     apt-get -y install curl wget  | tee -a "${LOG_FNAME}" # needed for installs
     apt-get -y install fail2ban | tee -a "${LOG_FNAME}"
+
+    apt-get -y install  iptables iptables-persistent
 
     # apps needed to install and compile the Natural Message server 
     # verification C programs.
@@ -947,7 +959,13 @@ if [    "${INSTALL_GPG_ERROR}" = "y" ]; then
 
     if [ ! -f ${LIBGPGERR_VER} ]; then
         ##wget ftp ftp://ftp.gnupg.org/gcrypt/libgpg-error/${LIBGPGERR_VER}.tar.bz2
-        curl -L --url ftp ftp://ftp.gnupg.org/gcrypt/libgpg-error/${LIBGPGERR_VER}.tar.bz2 -O
+#### FIX THIS
+#### FIX THIS
+#### FIX THIS
+#### FIX THIS
+#### FIX THIS
+#### FIX THIS
+        curl -L --url ftp://ftp.gnupg.org/gcrypt/libgpg-error/${LIBGPGERR_VER}.tar.bz2 -O
 
         ##wget ftp://ftp.gnupg.org/gcrypt/libgpg-error/${LIBGPGERR_VER}.tar.bz2.sig
         curl -L --url ftp://ftp.gnupg.org/gcrypt/libgpg-error/${LIBGPGERR_VER}.tar.bz2.sig -O
@@ -1133,6 +1151,12 @@ hardstatus on
 hardstatus alwayslastline
 hardstatus string "%{.bW}%-w%{.rW}%n %t%{-}%+w %=%{..G} %H %{..Y} %m/%d %C%a "
 #hardstatus string "%t%"
+# Some codes from the man page for screen:
+# The attribute set can either be specified as a hexadecimal number or a combination of the following letters:
+# d=dim , u=underline , b=bold , r=reverse , s=standout , B=blinking
+# 
+# Colors:
+# k=black , r=red , g=green , y=yellow , b=blue , m=magenta , c=cyan , w=white , d=default color , .=leave color unchanged 
 EOF
 fi
 ############################################################
@@ -1156,7 +1180,29 @@ fi
 ################################################################################
 cd /root/noarch
 ##wget https://github.com/naturalmessage/natmsgv/archive/master.tar.gz -O natmsgv.tar.gz
-curl -L --url https://github.com/naturalmessage/natmsgv/archive/master.tar.gz -O natmsgv.tar.gz -O
+##curl -L --url https://github.com/naturalmessage/natmsgv/archive/master.tar.gz -O natmsgv.tar.gz -O
+### FIX THE LINE ABOVE
+### FIX THE LINE ABOVE
+### FIX THE LINE ABOVE
+### FIX THE LINE ABOVE
+### FIX THE LINE ABOVE
+### FIX THE LINE ABOVE
+### FIX THE LINE ABOVE
+### FIX THE LINE ABOVE
+### FIX THE LINE ABOVE
+### FIX THE LINE ABOVE
+### FIX THE LINE ABOVE
+### FIX THE LINE ABOVE
+### FIX THE LINE ABOVE
+### FIX THE LINE ABOVE
+### FIX THE LINE ABOVE
+### FIX THE LINE ABOVE
+### FIX THE LINE ABOVE
+### FIX THE LINE ABOVE
+### FIX THE LINE ABOVE
+### FIX THE LINE ABOVE
+### FIX THE LINE ABOVE
+curl -L --url https://github.com/naturalmessage/natmsgv/archive/master.tar.gz -O 
 if [ $? != 0 ]; then
     echo "Error.  Failed to get the natmsg verification installation file."
     read -p "Press any key to continue ..." junk
@@ -1310,3 +1356,46 @@ else
         "found a shard table."
 fi
 ############################################################
+############################################################
+if [ -z "${IPTABLES_SETUP}" ]; then
+    echo "====================== here are the old rules before flushing and re-initializing:"
+    iptables --list
+    iptables --list-rules
+
+    # clear 
+    iptables --flush
+
+
+    # ## optionally insert a rule early in the chain to allow your ip
+    ##iptables -I INPUT -s 123.123.123.0/24 -j ACCEPT
+
+    # Allow established connections:
+    iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+    # ssh:
+    iptables -A INPUT -m state --state new -m tcp -p tcp --dport 22 -j ACCEPT
+    # postgre sql
+    iptables -A INPUT -m state --state new -m tcp -p tcp --dport 5432 -j ACCEPT
+    # https and https ports:
+    iptables -A INPUT -m state --state new -m tcp -p tcp --dport 80 -j ACCEPT
+    iptables -A INPUT -m state --state new -m tcp -p tcp --dport 443 -j ACCEPT
+
+    # Erlang connector for testing 
+    iptables -A INPUT -m state --state new -m tcp -p tcp --dport 8443 -j ACCEPT
+    # shard server ports:
+    iptables -A INPUT -m state --state new -m tcp -p tcp --dport 4430:4440 -j ACCEPT
+
+    # Erlang stuff.
+    # the RPC setup for erlang.
+    iptables -A INPUT -p tcp --dport 111 -j ACCEPT
+    # I don't think I need to open 123 for the ntp/time
+    # server because I query another server as opposed
+    # to allowing somebody else to initialize a connection
+    # to my port 123.
+    #iptables -A INPUT -p udp --dport 123 -j ACCEPT
+
+    # SMTP server
+    # iptables -A INPUT -p tcp --dport 25 -j ACCEPT
+
+    # for multiple VPN servers
+fi
+

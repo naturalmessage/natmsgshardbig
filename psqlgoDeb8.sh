@@ -6,17 +6,31 @@
 # and /var/lib/postgresql/postgres-bob.log
 # or check the conf file shown in the output of
 #    ps -Af|grep postgre
+#
+# These tasks should probably be set up as services that are controlled
+# by systemctl, but I might run this (or a copy of it) from /etc/rc.local.
+# To make iptables settings permanent:
+#   apt-get install iptables-persistent
+#   iptables-save > /etc/iptables/rules.v4
+#
+
 
 PGSQL_BIN=/usr/lib/postgresql/9.4/bin/postgres
 PGSQL_CONF=/etc/postgresql/9.4/main/postgresql.conf
 PGSQL_DATA=/etc/postgresql/9.4/main
 PGUSER_HOME=/usr/lib/postgresql 
 
+echo "====================== here are the old rules before flushing and re-initializing:"
 iptables --list
 iptables --list-rules
 
-# 
-iptables -I INPUT -s 204.13.129.0/24 -j ACCEPT
+# clear 
+iptables --flush
+
+
+# ## optionally insert a rule early in the chain to allow your ip
+##iptables -I INPUT -s 123.123.123.0/24 -j ACCEPT
+
 # Allow established connections:
 iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 # ssh:
@@ -30,19 +44,21 @@ iptables -A INPUT -m state --state new -m tcp -p tcp --dport 443 -j ACCEPT
 # Erlang connector for testing 
 iptables -A INPUT -m state --state new -m tcp -p tcp --dport 8443 -j ACCEPT
 # shard server ports:
-iptables -A INPUT -m state --state new -m tcp -p tcp --dport 4430 -j ACCEPT
-iptables -A INPUT -m state --state new -m tcp -p tcp --dport 4431 -j ACCEPT
-iptables -A INPUT -m state --state new -m tcp -p tcp --dport 4432 -j ACCEPT
-iptables -A INPUT -m state --state new -m tcp -p tcp --dport 4433 -j ACCEPT
-iptables -A INPUT -m state --state new -m tcp -p tcp --dport 4434 -j ACCEPT
-iptables -A INPUT -m state --state new -m tcp -p tcp --dport 4435 -j ACCEPT
-iptables -A INPUT -m state --state new -m tcp -p tcp --dport 4436 -j ACCEPT
-iptables -A INPUT -m state --state new -m tcp -p tcp --dport 4437 -j ACCEPT
-iptables -A INPUT -m state --state new -m tcp -p tcp --dport 4438 -j ACCEPT
-iptables -A INPUT -m state --state new -m tcp -p tcp --dport 4439 -j ACCEPT
-iptables -A INPUT -m state --state new -m tcp -p tcp --dport 4440 -j ACCEPT
-# Erlang stuff?
-# the RPC setup for erlang?
+iptables -A INPUT -m state --state new -m tcp -p tcp --dport 4430:4440 -j ACCEPT
+## iptables -A INPUT -m state --state new -m tcp -p tcp --dport 4430 -j ACCEPT
+## iptables -A INPUT -m state --state new -m tcp -p tcp --dport 4431 -j ACCEPT
+## iptables -A INPUT -m state --state new -m tcp -p tcp --dport 4432 -j ACCEPT
+## iptables -A INPUT -m state --state new -m tcp -p tcp --dport 4433 -j ACCEPT
+## iptables -A INPUT -m state --state new -m tcp -p tcp --dport 4434 -j ACCEPT
+## iptables -A INPUT -m state --state new -m tcp -p tcp --dport 4435 -j ACCEPT
+## iptables -A INPUT -m state --state new -m tcp -p tcp --dport 4436 -j ACCEPT
+## iptables -A INPUT -m state --state new -m tcp -p tcp --dport 4437 -j ACCEPT
+## iptables -A INPUT -m state --state new -m tcp -p tcp --dport 4438 -j ACCEPT
+## iptables -A INPUT -m state --state new -m tcp -p tcp --dport 4439 -j ACCEPT
+## iptables -A INPUT -m state --state new -m tcp -p tcp --dport 4440 -j ACCEPT
+
+# Erlang stuff.
+# the RPC setup for erlang.
 iptables -A INPUT -p tcp --dport 111 -j ACCEPT
 # I don't think I need to open 123 for the ntp/time
 # server because I query another server as opposed
@@ -53,7 +69,7 @@ iptables -A INPUT -p tcp --dport 111 -j ACCEPT
 # SMTP server
 # iptables -A INPUT -p tcp --dport 25 -j ACCEPT
 
-# for multiple vpn servers
+# for multiple VPN servers
 ###old firewall-cmd  --zone=public --add-port=1194/tcp
 iptables -A INPUT -p udp --dport 1194 -j ACCEPT
 iptables -A INPUT -p udp --dport 1195  -j ACCEPT
@@ -75,6 +91,12 @@ iptables -A INPUT -p tcp --dport 1196  -j ACCEPT
 # all other incomming:
 # Default policy is to drop inbound action:
 iptables --policy INPUT DROP
+
+###############################################################################
+## Make the iptables settings permanent only after you know that
+## they work and you can connect to your machine via ssh if you need to.
+#   iptables-save > /etc/iptables/rules.v4
+###############################################################################
 ###############################################################################
 ###############################################################################
 if !(systemctl status fail2ban); then
