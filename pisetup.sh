@@ -1,9 +1,9 @@
-#!/bin/sh
+#!/bin/bash
 #
 # Setup notes and script for RaspberryPi with Raspbian/Debian 8.
 # 
 # To put this on a new Raspberry PI that runs Raspbian 8, login to the
-# pi (the defulat user ID is pi and the default password is password), 
+# pi (the defulat user ID is pi and the default password is raspberry), 
 # then you can run one of two things:
 # 1) if you have a wired Ethernet connection and your Internet is
 #    working on your pi:
@@ -12,8 +12,8 @@
 #    to a USB stick and then put the USB stick into the Raspberry pi
 #    to run the commands
 # 3) If you can put the Raspberry pi boot SD card into your other computer
-#    you could mount the drive and copy this script to the /home/pi directory
-#    (if you know how to mount ext4 drives manually).
+#    you could mount the drive and copy this script (and also setupNM-Deb8.sh)
+#    to the /home/pi directory (if you know how to mount ext4 drives manually).
 ###############################################################################
 # to do
 # 2) add code in the NM setup  to copy config scripts to new user IDs (template?).
@@ -22,7 +22,7 @@
 ###############################################################################
 # Misc notes:
 #
-# The initial user id for Raspbian 8 is pi and the password is password.
+# The initial user id for Raspbian 8 is pi and the password is raspberry.
 #
 # The default Raspbian keyboard is for the UK, so here are a few key
 # if you have a U.S. keyboard.  (note that I change keyboard layout below).
@@ -31,13 +31,28 @@
 #   right-alt tilde    | 
 #
 #
-# When I used dd to put the initial boot image on the SD card, 
-# I used parted to expand the size of the partition, then in this script,
-# the file system is expanded to fill the partition.
-#
+# After I used dd to put the initial boot image on the SD card, 
+# * I used the parted command (and then 'resizepart 2') to expand the size of
+#   the partition, then in this script, the file system is expanded to
+#   fill the partition.
+# * mount the new SD image on your laptop/main computer:
+#   (In my case, my newly formatted SD card was in /dev/sdc, but
+#   your device name might be different, use the lsblk command
+#   to see what your device name is).
+#     lsblk -a
+#     sudo mkdir -p /media/SD
+#     sudo mount /dev/sdc2 /media/SD
+#     cp pisetup.sh /media/SD/home/pi
+#     cp setupNM-Deb8.sh /media/SD/home/pi
+#     cd /media/SD/home/pi
+#     chown 1000:1000 *
+#     cd ~
+#     sync
+#     umount /media/SD
+#     eject /dev/sdc
 ###############################################################################
 
-if [ ! "$EUID" == "0" ]; then
+if [ ! "$EUID" = "0" ]; then
     echo "Error.  You must run this script as root."
     echo "Try rerunning like this:"
     echo "   sudo $0"
@@ -75,23 +90,26 @@ confirm(){
 ################################################################################
 # ON FIRST LOGIN, ADD A NEW USER, GIVE IT ROOT PRIV, SET THE ROOT PW!!!
 
-echo "########################################################################"
-echo "pi pi pi pi pi pi pi pi pi pi pi pi pi pi pi pi" 
-echo "You will now be prompted to enter a new password for the pi user ID."
-echo "Be sure that you remember this password."
-passwd pi
 
-read -p "Enter the user ID of a non-root user to add: " MY_UID
-useradd -m ${MY_UID}
+if (confirm "Do you want to update passwords now? (y/n): "); then
+	echo "########################################################################"
+	echo "pi pi pi pi pi pi pi pi pi pi pi pi pi pi pi pi" 
+	echo "You will now be prompted to enter a new password for the pi user ID."
+	echo "Be sure that you remember this password."
+	passwd pi
 
-echo "Now you have to give you new user ID root privileges"
-vi /etc/sudoers
+	read -p "Enter the user ID of a non-root user to add: " MY_UID
+	useradd -m ${MY_UID}
 
-echo "########################################################################"
-echo "root root root root root root root root root root root root root root root root" 
-echo "You will now be prompted to enter a new password for the root user ID."
-echo "Be sure that you remember this password."
-passwd root
+	echo "Now you have to give you new user ID root privileges"
+	vi /etc/sudoers
+
+	echo "########################################################################"
+	echo "root root root root root root root root root root root root root root root root" 
+	echo "You will now be prompted to enter a new password for the root user ID."
+	echo "Be sure that you remember this password."
+	passwd root
+fi
 
 #############################################################
 #  Optionally set keyboard to US.
@@ -156,58 +174,12 @@ echo
 echo "Note: the wifi setup here assumes that you will connect to "
 echo "exactly one wifi signal, but you could rerun this to change to "
 echo "a new connection."
-if (confirm "Do you want to connect to a wifi network? (y/n): "); then
-    # try to bring up wifi:
-    ifconfig wlan0 up
-
-    # Get a list of channels
-
-    # sudo iwlist scan | less
-    iwlist scan|grep 'ESSID\|Address\|wlan'
-
-    echo "Note that there might be hidden networks not shown in the list above."
-    read -p "Enter and ESSID from the list above to connect to that wifi: " WIFI_ESSID
-    iwconfig wlan0 essid "${WIFI_ESSID}"
-
-    ip link show wlan0
-    ip link set wlan0 up
-
-    # check wlan0
-    iwconfig wlan0
-
-    # See if you are connectd to the Internet
-    #    (it will return a text status message)
-    /sbin/iw wlan0 link
-
-    # one-time setup... create a conf file for the
-    # wireless network:
-
-    # make an archive copy of the wpa config file:
-    cp -n /etc/wpa_supplicant/wpa_supplicant.conf /etc/wpa_supplicant/wpa_supplicant${DSTAMP}.conf
-
-    CONF_CHECK=$(cat /etc/wpa_supplicant/wpa_supplicant.conf | grep "${WIFI_ESSID}")
-    if [ -n "${CONF_CHECK}" ]; then
-        echo "WARNING.  You already have an entry for this wifi in /etc/wpa_supplicant/wpa_supplicant.conf"
-        echo "I will overwrite that.  You can always restore it by renaming the backup file in that same directory."
-    fi
-
-    # I am assuming only one wifi.  You could change the '>' to '>>' to append this wifi
-    wpa_passphrase "${WIFI_ESSID}" > /etc/wpa_supplicant/wpa_supplicant.conf
-
-    # run it, where -D specifies the wireless driver.
-    wpa_supplicant -B -D wext -i wlan0 -c /etc/wpa_supplicant/wpa_supplicant.conf
-
-
-    # you should probably just reboot now and check ifconfig after rebooting.
-
-    # check for connection again:
-    # (it should show a dozen lines about the ESSID, signal, and other info about the connection)
-    echo "Here is some info about the wifi connection.  It should show information about"
-    echo "the connection if you are connected:"
-    /sbin/iw wlan0 link
-fi
+./pi-wifi-setup.sh
 
 ###############################################################################
+apt-get update && apt-get -y upgrade
+apt-get -y install screen
+
 # cryptsetup for encrypted disks
 # There is a firmware problem in Feb 2016 that affects Raspberry Pi and its
 # ability to run cryptsetup.

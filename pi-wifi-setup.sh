@@ -1,6 +1,6 @@
 #!/bin/bash
 
-if [ ! "$EUID" == "0" ]; then
+if [ ! "$EUID" = "0" ]; then
     echo "Error.  You must run this script as root."
     echo "Try rerunning like this:"
     echo "   sudo $0"
@@ -80,7 +80,7 @@ echo "Note: the best setup for a Raspberry Pi Natural Message shard server"
 echo "is to connect with the Ethernet cable to the back of your Internet"
 echo "router as opposed to connecting over the wifi signal."
 echo "If you need to use wifi for some reason, you can continue."
-if (confirm "Do you want to connect to a wifi network? (y/n): "); then
+if (confirm "Do you want register a new wifi network so you can connect to it automatically (this is a one-time setup unless you made a typo on a prior run)? (y/n): "); then
     # try to bring up wifi:
     ifconfig wlan0 up
 
@@ -166,6 +166,33 @@ EOF
         echo "====== note, high quality values are better"
     fi
 fi
-# ip link set wlan0 up
-echo "================= here is some info about wlan0 wifi connection:"
+ITEST=$(/sbin/iw wlan0 link|grep -i 'not connected')
+good='n'
+while [ "${good}" = 'n' ]; do 
+	echo "I will test the Internet using a ping... This could take 40 seconds..."
+	ping -c 2 -W 40 yahoo.com
+	if [ ! "$?" = "0" ]; then
+		echo "The wifi does not appear to be up.  Attempting to fix it..."
+		# kill the old dhclient
+		dhclient -x wlan0
+		killall wpa_supplicant
+		## ip link set wlan0 up # does not work
+		ifconfig wlan0 up
+		iwlist scan|grep 'ESSID\|Address\|wlan'
+		echo "================= here is some info about wlan0 wifi connection:"
+		# the wpa_supplicant command was NOT WORKING, so I
+		# added the killall command to see what happens when I reconnect
+		wpa_supplicant -B -D wext -i wlan0 -c /etc/wpa_supplicant/wpa_supplicant.conf
+		echo "I will run dhclient, and that can take a minute..."
+		dhclient wlan0
+	else
+		echo "The ping test indicates that the Internet is working."
+	fi
+	echo "Double-checking the functionality of the Internet connection with another ping:"
+	ping -c 2 -W 40 yahoo.com
+	if [ "$?" = "0" ]; then
+		good='y'
+	fi
+done
+# show info on the connection
 /sbin/iw wlan0 link

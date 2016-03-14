@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 ################################################################################
 # Copyright 2015-2016 Natural Message, LLC.
@@ -134,6 +134,7 @@ CERT_KEY_ROOT='/var/natmsg/private'
 
 DBNAME='shardsvrdb' 
 
+mkdir -p "${PGUSER_HOME}"
 
 ################################################################################
 clear
@@ -238,8 +239,12 @@ esac
 
 ################################################################################
 
-apt-get update && apt-get upgrade
+echo "==================================================================="
+echo "Updating and upgrading aptitude... this can take a long time if your"
+echo "internet connection is slow"
+#apt-get update && apt-get upgrade
 
+echo "==================================================================="
 if [    "${INSTALL_BASICS}" = "y" ]; then
     # basics:
     if [ ! -d /root/noarch ]; then
@@ -544,7 +549,8 @@ chk_natmsg=$(ls /var/natmsg/naturalmsg_shard*| grep naturalmsg|head -n 1)
                 # The max-time and retries options are set to facilitate transfer
                 # across a slow connection.
         curl -L --max-time 900 --retry 5 --retry-delay 60 \
-            --url https://github.com/naturalmessage/natmsgshardbig/archive/master.tar.gz -o natmsgshardbig.tar.gz
+            --url https://github.com/naturalmessage/natmsgshardbig/archive/master.tar.gz \
+						-o natmsgshardbig.tar.gz
 
           if [ $? != 0 ]; then
             echo "Error, the download of the shard server python stuff failed."
@@ -558,13 +564,14 @@ chk_natmsg=$(ls /var/natmsg/naturalmsg_shard*| grep naturalmsg|head -n 1)
             else
                 cd natmsgshardbig-master
                 chown natmsg:natmsg *
-                cp * /var/natmsg
-                cp -vR sql "${SHARD_DIR}"
-                if [ ! -f ${SHARD_DIR}/sql/0002create_db.sh ]; then
-                    echo "Error.    I do not see the 0002create_db.sh file in the expected place."
-                    echo "This means that the Nat Msg database will not be set up properly."
-                    read -p "Press ENTER to continue or CTL-c to quit..." junk
-                fi
+                cp -nv * /var/natmsg
+                #### shard_dir is not ready yet: cp -vR sql "${SHARD_DIR}"
+                #### shard_dir is not ready yet: if [ ! -f "${SHARD_DIR}/sql/0002create_db.sh" ]; then
+                #### shard_dir is not ready yet:     echo "Error.    I do not see the 0002create_db.sh file in the expected place"
+                #### shard_dir is not ready yet:     echo "(${SHARD_DIR}/sql/0002create_db.sh)."
+                #### shard_dir is not ready yet:     echo "This means that the Nat Msg database will not be set up properly."
+                #### shard_dir is not ready yet:     read -p "Press ENTER to continue or CTL-c to quit..." junk
+                #### shard_dir is not ready yet: fi
             fi
         fi
     fi
@@ -814,83 +821,7 @@ apt-get -y install python3-openssl | tee -a "${LOG_FNAME}"
 ## ##  #
 
 ########################################################################
-
-
-if [    "${INSTALL_SSC}" = "y" ]; then
-    #
-    # test it by running python3 and execute "from OpenSSL import SSL"
-    #
-    # Then create your ssl keys:
-    # THESE FILES NEED TO BE ON AN ECRYPTFS DIRECTORY
-    # THAT IS OWNED BY USER NATMSG.
-    #     # 
-    if [ ! -d /root/noarch/keytemp ]; then
-        mkdir -p /root/noarch/keytemp
-    fi
-    chmod 700 /root/noarch/keytemp
-    cd /root/noarch/keytemp
-    # I previously got an error, but I ran it a few more times
-    # and it was ok--or try fixing permissions on ~/.rnd:
-    # error:0906906F:PEM routines:PEM_ASN1_write_bio:read key
-    openssl genrsa -aes256 -out ca.key 2048
-    # remove the password if need be (and store files on ecryptfs)
-    openssl rsa -in ca.key -out ca.key
-    openssl req -new -inform PEM -outform PEM -key ca.key -out ca.csr
-    # For a real cert,
-    # 1) send  ca.csr (Certificate Request) to the cert authority
-    # 2) get ca.crt from the certificate authority and put it in
-    #    /var/natmsg/private
-    # 3) copy the ca.key that you created above to /var/natmsg/private
-    # 4) If the cert provider gave you an additional or 'intermediate'
-    #    cert, then save each cert in its own file for backup purposes,
-    #    then include the intermediate cert at the bottom of the ca.crt
-    #    file (calling it ca.crt)  
-    # 5) fix the permissions in /var/natmsg/private:
-    #     chown natmsg:natmsg /var/natmsg/private/*
-    # 6) If the cert is new, verify the server.ssl_certificate filename
-    #    in the appropriate conf file in /var/natmsg/conf
-    # 7) backup the server  
-         
-
-    #Do the next openssl commands ONLY FOR SELF-SIGNED CERTIFICATE.
-    # create the self-signed certificate
-    echo "When the X509 certificate request is being created,"
-    echo "you need to enter the correct domain name or IP in the"
-    echo "Common Name field (do not include 'http://')"
-    ##openssl x509 -req -inform PEM -outform PEM -days 63 \
-    openssl x509 -req -inform PEM -outform PEM -days 400 \
-        -in ca.csr -signkey ca.key -out ca.crt
-
-    # You can run this to get information from your crt file:
-    openssl x509 -text -in ca.crt # get info
-    if [ ! -d "${CERT_KEY_ROOT}" ]; then
-        mkdir -p "${CERT_KEY_ROOT}"
-    fi
-    chown -R natmsg:natmsg "${CERT_KEY_ROOT}"
-    chmod 700 "${CERT_KEY_ROOT}"
-
-    # Archive old keys before moving the new ones into place:
-    if [ -f "${CERT_KEY_ROOT}/ca.key" ]; then
-        # backup the old keys
-        mv "${CERT_KEY_ROOT}/ca.key" "${CERT_KEY_ROOT}/${DSTAMP}.ca.key"
-    fi
-
-    if [ -f "${CERT_KEY_ROOT}/ca.csr" ]; then
-        # backup the old keys
-        mv "${CERT_KEY_ROOT}/ca.csr" "${CERT_KEY_ROOT}/${DSTAMP}.ca.csr"
-    fi
-
-    if [ -f "${CERT_KEY_ROOT}/ca.crt" ]; then
-        # backup the old keys
-        mv "${CERT_KEY_ROOT}/ca.crt" "${CERT_KEY_ROOT}/${DSTAMP}.ca.crt"
-    fi
-
-    cp -i /root/noarch/keytemp/ca.crt "${CERT_KEY_ROOT}"
-    cp -i /root/noarch/keytemp/ca.key "${CERT_KEY_ROOT}"
-
-fi
-
-#Test ssl here (no IPs allowed at the first one): https://www.ssllabs.com/ssltest/
+########################################################################
 
 ############################################################
 ## The Requests lib for python comes from
@@ -987,16 +918,16 @@ if [    "${INSTALL_GPG_ERROR}" = "y" ]; then
         tar -xf "${LIBGPGERR_VER}.tar"
 
         cd "${LIBGPGERR_VER}" 
-        if ! ./configure --enable-static --disable-shared --prefix=/usr/local; then
+        if  ! ./configure --enable-static --disable-shared --prefix=/usr/local; then
             echo "Error. failed to configure ${LIBGPGERR_VER}"
             exit 12
         else
             # the static lib is lib/libgpg-error/src/.libs/libgpg-error.a
-            if ! make; then
+            if  ! make ; then
                 echo "Error. Failed to make libgpg-error, which is needed for libgcrypt"
                 exit 144
             else
-                if ! make install; then
+                if  ! make install; then
                     echo "Error. Failed to install libgpg-error, which is needed " \
                         "for libgcrypt"
                     exit 145
@@ -1066,13 +997,13 @@ if [    "${COMPILE_LIBGCRYPT}" = "y" ]; then
 
     # The static library made by make with the static option is:
     #    lib/libksba/src/.libs/libksba.a
-    if ! make; then
+    if [ ! make ]; then
         echo "Error.    Failed to make libgcrypt."
-        exit 133
+        exit 135
     fi
-    if !(make install); then
+    if  ! make install; then
         echo "Error.    Failed to run make install libgcrypt."
-        exit 133
+        exit 137
     fi
 fi
 
@@ -1202,7 +1133,9 @@ cd /root/noarch
 ### FIX THE LINE ABOVE
 ### FIX THE LINE ABOVE
 ### FIX THE LINE ABOVE
-curl -L --url https://github.com/naturalmessage/natmsgv/archive/master.tar.gz -O 
+curl -L \
+	--url https://github.com/naturalmessage/natmsgv/archive/master.tar.gz \
+	-o natmsgv.tar.gz
 if [ $? != 0 ]; then
     echo "Error.  Failed to get the natmsg verification installation file."
     read -p "Press any key to continue ..." junk
@@ -1219,7 +1152,7 @@ else
         if [ $? != 0 ]; then
             echo "Failed to make natmsgv (server verification C program"
         fi
-        cp nm_* /var/natmsg
+        cp -nv nm_* /var/natmsg
         chown natmsg:natmsg /var/natmsg/nm_*
     fi
 fi
@@ -1297,6 +1230,17 @@ if [ $? = 0 ]; then
     echo "The shardsvrdb database exists"
 else
     echo "I did not find the shardsvrdb.  I will create it now"
+
+
+    cd /root/noarch/natmsgshardbig-master
+    cp -vR sql "${SHARD_DIR}"
+    if [ ! -f "${SHARD_DIR}/sql/0002create_db.sh" ]; then
+        echo "Error.    I do not see the 0002create_db.sh file in the expected place"
+        echo "(${SHARD_DIR}/sql/0002create_db.sh)."
+        echo "This means that the Nat Msg database will not be set up properly."
+        read -p "Press ENTER to continue or CTL-c to quit..." junk
+    fi
+
     cd "${SHARD_DIR}/sql"
     sudo -u postgres  ./0002create_db.sh
     echo "==== Finished 0002create_db.sh"
@@ -1399,3 +1343,81 @@ if [ -z "${IPTABLES_SETUP}" ]; then
     # for multiple VPN servers
 fi
 
+########################################################################
+
+
+if [    "${INSTALL_SSC}" = "y" ]; then
+    #
+    # test it by running python3 and execute "from OpenSSL import SSL"
+    #
+    # Then create your ssl keys:
+    # THESE FILES NEED TO BE ON AN ECRYPTFS DIRECTORY
+    # THAT IS OWNED BY USER NATMSG.
+    #     # 
+    if [ ! -d /root/noarch/keytemp ]; then
+        mkdir -p /root/noarch/keytemp
+    fi
+    chmod 700 /root/noarch/keytemp
+    cd /root/noarch/keytemp
+    # I previously got an error, but I ran it a few more times
+    # and it was ok--or try fixing permissions on ~/.rnd:
+    # error:0906906F:PEM routines:PEM_ASN1_write_bio:read key
+    openssl genrsa -aes256 -out ca.key 2048
+    # remove the password if need be (and store files on ecryptfs)
+    openssl rsa -in ca.key -out ca.key
+    openssl req -new -inform PEM -outform PEM -key ca.key -out ca.csr
+    # For a real cert,
+    # 1) send  ca.csr (Certificate Request) to the cert authority
+    # 2) get ca.crt from the certificate authority and put it in
+    #    /var/natmsg/private
+    # 3) copy the ca.key that you created above to /var/natmsg/private
+    # 4) If the cert provider gave you an additional or 'intermediate'
+    #    cert, then save each cert in its own file for backup purposes,
+    #    then include the intermediate cert at the bottom of the ca.crt
+    #    file (calling it ca.crt)  
+    # 5) fix the permissions in /var/natmsg/private:
+    #     chown natmsg:natmsg /var/natmsg/private/*
+    # 6) If the cert is new, verify the server.ssl_certificate filename
+    #    in the appropriate conf file in /var/natmsg/conf
+    # 7) backup the server  
+         
+
+    #Do the next openssl commands ONLY FOR SELF-SIGNED CERTIFICATE.
+    # create the self-signed certificate
+    echo "When the X509 certificate request is being created,"
+    echo "you need to enter the correct domain name or IP in the"
+    echo "Common Name field (do not include 'http://')"
+    ##openssl x509 -req -inform PEM -outform PEM -days 63 \
+    openssl x509 -req -inform PEM -outform PEM -days 400 \
+        -in ca.csr -signkey ca.key -out ca.crt
+
+    # You can run this to get information from your crt file:
+    openssl x509 -text -in ca.crt # get info
+    if [ ! -d "${CERT_KEY_ROOT}" ]; then
+        mkdir -p "${CERT_KEY_ROOT}"
+    fi
+    chown -R natmsg:natmsg "${CERT_KEY_ROOT}"
+    chmod 700 "${CERT_KEY_ROOT}"
+
+    # Archive old keys before moving the new ones into place:
+    if [ -f "${CERT_KEY_ROOT}/ca.key" ]; then
+        # backup the old keys
+        mv "${CERT_KEY_ROOT}/ca.key" "${CERT_KEY_ROOT}/${DSTAMP}.ca.key"
+    fi
+
+    if [ -f "${CERT_KEY_ROOT}/ca.csr" ]; then
+        # backup the old keys
+        mv "${CERT_KEY_ROOT}/ca.csr" "${CERT_KEY_ROOT}/${DSTAMP}.ca.csr"
+    fi
+
+    if [ -f "${CERT_KEY_ROOT}/ca.crt" ]; then
+        # backup the old keys
+        mv "${CERT_KEY_ROOT}/ca.crt" "${CERT_KEY_ROOT}/${DSTAMP}.ca.crt"
+    fi
+
+    cp -i /root/noarch/keytemp/ca.crt "${CERT_KEY_ROOT}"
+    cp -i /root/noarch/keytemp/ca.key "${CERT_KEY_ROOT}"
+
+fi
+
+#Test ssl here (no IPs allowed at the first one): https://www.ssllabs.com/ssltest/
