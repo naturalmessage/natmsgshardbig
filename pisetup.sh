@@ -14,6 +14,15 @@
 # 3) If you can put the Raspberry pi boot SD card into your other computer
 #    you could mount the drive and copy this script (and also setupNM-Deb8.sh)
 #    to the /home/pi directory (if you know how to mount ext4 drives manually).
+# 4) add a file (the name can not contain a ~ or a .) in /etc/sudoers.d/ with
+#    with two lines like this (without the leading '#' and optionally include
+#    another, custom user ID instead of 'super')
+#       super ALL=(ALL:ALL) ALL
+#       natmsg ALL=(ALL:ALL) ALL
+# 5) add an entry for a root cron job in /var/spool/cron/crontabs/root 
+#    that contains:
+#       */5 * * * * /usr/bin/python3.4 /var/natmsg/monitor.py
+# 6) modify /etc/ssh/sshd_config to set PermitRootLogin to say 'yes'.
 ###############################################################################
 # to do
 # 2) add code in the NM setup  to copy config scripts to new user IDs (template?).

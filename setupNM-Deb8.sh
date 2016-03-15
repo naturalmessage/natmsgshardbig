@@ -71,6 +71,40 @@ confirm(){
   return 0
 }
 
+install_it(){
+	local pgm_name="$1"
+	apt-get -y install ${pgm_name}
+	if [ $? = 0 ]; then
+		echo "===== successfully installed ${pgm_name}" | tee -a ${LOG_FNAME}
+	else
+		echo "Error installing ${pgm_name}" | tee -a ${LOG_FNAME}
+		echo "I will try again after 60 seconds in case it was a network slowdown.." | tee -a ${LOG_FNAME}
+		sleep 60
+		apt-get -y install ${pgm_name}
+		if [ $? = 0 ]; then
+		  echo "===== successfully installed ${pgm_name}" | tee -a ${LOG_FNAME}
+		else
+		  echo "===== Error installing ${pgm_name}" | tee -a ${LOG_FNAME}
+			echo "quitting now." | tee -a ${LOG_FNAME}
+			exit 9753
+		fi
+	fi
+}
+
+
+
+sql_it(){
+	local SQL_NM="$1"
+	local DB_NM="$2"
+  sudo -u postgres psql -c "\i ${SQL_NM}" "${DB_NM}"
+	if [ $? = 0 ]; then
+		echo "==== successfully processed SQL ${SQL_NM}."  | tee -a ${LOG_FNAME}
+	else
+		echo "==== Error processing SQL ${SQL_NM}."  | tee -a ${LOG_FNAME}
+		exit 7531
+	fi
+}
+
 ################################################################################
 
 echo "Note if you run this in the future after Debian 8 is old..."
@@ -253,7 +287,7 @@ if [    "${INSTALL_BASICS}" = "y" ]; then
     cd /root/noarch
 
 
-    apt-get -y install debian-keyring
+    install_it debian-keyring
 
     # for pscopg 2.6.1
     gpg --keyserver pgp.mit.edu --recv-keys 6013BD3AFCF957DE
@@ -266,40 +300,44 @@ if [    "${INSTALL_BASICS}" = "y" ]; then
 
 
 
-    apt-get -y install vim lynx screen rsync | tee -a "${LOG_FNAME}"
-    apt-get -y install curl wget  | tee -a "${LOG_FNAME}" # needed for installs
-    apt-get -y install fail2ban | tee -a "${LOG_FNAME}"
+    install_it vim 
+    install_it lynx 
+    install_it screen 
+    install_it rsync 
+    install_it curl wget   # needed for installs
+    install_it fail2ban 
 
-    apt-get -y install  iptables iptables-persistent
+    install_it iptables
+		install_it iptables-persistent
 
     # apps needed to install and compile the Natural Message server 
     # verification C programs.
-    apt-get -y install gcc | tee -a "${LOG_FNAME}"
-    apt-get -y install make | tee -a "${LOG_FNAME}"
+    install_it gcc 
+    install_it make 
     echo "bzip2 (bz2) with C headers is needed for the libgcrypt install."
-    #apt-get -y install bzip2-devel
-    apt-get source bzip2 | tee -a "${LOG_FNAME}"
+    #install_it bzip2-devel
+    apt-get source bzip2 
     #
     # for the pythong command-line client, needed for testing the servers
-    apt-get -y install unrtf
+    install_it unrtf
     #
     # Devel headers needed for pyOpenssl to tet TLS_1_2
-    #apt-get -y install openssl
-    apt-get -y install dpkg-dev | tee -a "${LOG_FNAME}"
-    apt-get source openssl | tee -a "${LOG_FNAME}"
+    #install_it openssl
+    install_it dpkg-dev 
+    apt-get source openssl 
     #
-    # apt-get -y install lib${ARCHBITS}ncurses5-dev
+    # install_it lib${ARCHBITS}ncurses5-dev
 
-    apt-get -y install zlib1g-dev | tee -a "${LOG_FNAME}"
+    install_it zlib1g-dev 
 
-    apt-get source lib${ARCHBITS}ncurses5-dev | tee -a "${LOG_FNAME}"
-    apt-get source sqlite3 | tee -a "${LOG_FNAME}"
+    apt-get source lib${ARCHBITS}ncurses5-dev 
+    apt-get source sqlite3 
 
-    apt-get source readline | tee -a "${LOG_FNAME}"
+    apt-get source readline 
 
-    apt-get source libpcap | tee -a "${LOG_FNAME}"
+    apt-get source libpcap 
 
-    apt-get source xz-utils | tee -a "${LOG_FNAME}"
+    apt-get source xz-utils 
 fi
 
 ################################################################################
@@ -430,7 +468,7 @@ fi
 
 
 # ntpdate will disappear, but it works for now
-apt-get -y install ntpdate | tee -a "${LOG_FNAME}"
+install_it ntpdate 
 # sync the time
 ntpdate 2.fedora.pool.ntp.org
 
@@ -455,9 +493,9 @@ fi
 # the builtin _ssl lib did not have TLS_1_2.
 #
 echo "Installing/updating python3-dev..."
-apt-get -y install python3-dev | tee -a "${LOG_FNAME}"
+install_it python3-dev 
 echo "Installing/updating python3-openssl..."
-apt-get -y install python3-openssl | tee -a "${LOG_FNAME}"
+install_it python3-openssl 
 ### read -p "Do you want to install Python3 from source? (y/n): " MENU_CHOICE
 ### case $MENU_CHOICE in
 ###     'n'|'N')
@@ -545,6 +583,15 @@ chk_natmsg=$(ls /var/natmsg/naturalmsg_shard*| grep naturalmsg|head -n 1)
             mkdir -p /root/noarch
         fi
         cd /root/noarch
+	
+	# If this is a rerun, just delete old files -- they might be half-assed downloads,
+	# and I don't want to prompt the user.
+	if [ -f natmsgshardbig.tar.gz ]; then
+		rm natmsgshardbig.tar.gz
+	fi
+	if [ -f natmsgshardbig.tar ]; then
+		rm natmsgshardbig.tar
+	fi
 
                 # The max-time and retries options are set to facilitate transfer
                 # across a slow connection.
@@ -593,10 +640,11 @@ if [    "${INSTALL_PSQL}" = "y" ]; then
     # Install PostgreSQL
     #
     ##yum -y install postgresql-server postgresql-libs    postgresql-contrib postgresql-plpython
-    apt-get -y install postgresql-server-dev-all | tee -a "${LOG_FNAME}"
-    apt-get -y install postgresql postgresql-client | tee -a "${LOG_FNAME}"
-    apt-get source postgresql-server-dev-all | tee -a "${LOG_FNAME}"
-    apt-get -y install pgp # for verification of downloaded files.
+    install_it postgresql-server-dev-all 
+    install_it postgresql
+    install_it postgresql-client 
+    apt-get source postgresql-server-dev-all 
+    install_it pgp # for verification of downloaded files.
     
     echo  ""
     echo "When prompted, enter the password for the postgres user ID"
@@ -611,7 +659,7 @@ if [    "${INSTALL_PSQL}" = "y" ]; then
     echo "put the SQL stuff for Natural Message there."
     echo ""
     echo "The default data directory for the PostgreSQL database using the Debian"
-    echo "apt-get -y install is:"
+    echo "install_it is:"
     echo "   ${PGSQL_DATA}"
     echo "(Note that on my other setup the 'main' dir is called 'data'.)"
     echo ""
@@ -708,16 +756,16 @@ if [    "${INSTALL_PSQL}" = "y" ]; then
     
 
   cd /root/noarch
-  apt-get -y install libpqxx3-dev | tee -a "${LOG_FNAME}"
-  gunzip psycopg2-${PSYCOPG_VER}.tar.gz | tee -a "${LOG_FNAME}"
-  tar -xf psycopg2-${PSYCOPG_VER}.tar | tee -a "${LOG_FNAME}"
+  install_it libpqxx3-dev 
+  gunzip psycopg2-${PSYCOPG_VER}.tar.gz 
+  tar -xf psycopg2-${PSYCOPG_VER}.tar 
   cd /root/noarch/psycopg2-${PSYCOPG_VER}
 
-  echo "my directory is `pwd`" | tee -a "${LOG_FNAME}"
+  echo "my directory is `pwd`" 
 
   # You must run the correct python3 executable.  There might
   # be an old verion in /usr/bin.
-  "${PYTHON3_PGM}" ./setup.py install | tee -a "${LOG_FNAME}"
+  "${PYTHON3_PGM}" ./setup.py install 
   if [ $? != 0 ]; then
     echo "Failed to install psycopg2, which is required for CherryPy to access the database."
     exit 8478
@@ -739,7 +787,7 @@ else
     echo "Cherrypy is not installed.  Installing now."
     # Debian 8 has a package for python3-cherrypy3 that should
     # simplify the install.  The old Debian 7 installed from source.
-  apt-get -y install python3-cherrypy3 | tee -a "${LOG_FNAME}"
+  install_it python3-cherrypy3 
     #
     #
 fi
@@ -790,9 +838,9 @@ fi
 ## in an ecryptfs directory
 
 # install libffi with headers:
-apt-get -y install libffi-dev | tee -a "${LOG_FNAME}"
+install_it libffi-dev 
 
-apt-get -y install python3-openssl | tee -a "${LOG_FNAME}"
+install_it python3-openssl 
 #
 # This is the old debian 7 routine:
 ## ##  # The built-in version of the python ssl lib in Debian7 did not have tls 1.2
@@ -831,7 +879,7 @@ apt-get -y install python3-openssl | tee -a "${LOG_FNAME}"
 ##
 ## This was installed from source in Debian 7, now there is a package:
 
-apt-get -y install python3-requests | tee -a "${LOG_FNAME}"
+install_it python3-requests
 #### old debian 7 version
 ### if [  "${MENU_CHOICE}" = "y" ]; then
 ###   cd /root/noarch
@@ -1100,7 +1148,7 @@ rslt=$(crontab -l|grep monitor.py)
     echo "   sudo crontab -e"
     echo "to edit a crontab, then past the example text, and double check"
     echo "the python3 program name and the python script file name."
-    echo "*/5 * * * * /usr/local/bin/python3 /var/natmsg/monitor.py"
+    echo "*/5 * * * * /usr/bin/python3.4 /var/natmsg/monitor.py"
     echo "copy the line above with the mouse and prepare to paste it into crontab..."
     read -p "Press any key to continue ..." junk
     crontab -e
@@ -1150,7 +1198,9 @@ else
         make
 
         if [ $? != 0 ]; then
-            echo "Failed to make natmsgv (server verification C program"
+            echo "Failed to make natmsgv (server verification C program" | tee -a "${LOG_FNAME}"
+				else
+            echo "Successfully ran make natmsgv (server verification C program" | tee -a "${LOG_FNAME}"
         fi
         cp -nv nm_* /var/natmsg
         chown natmsg:natmsg /var/natmsg/nm_*
@@ -1162,15 +1212,9 @@ fi
 ############################################################
 #############################################################
 clear
-echo "The first part of the installation is finished." | tee -a "${LOG_FNAME}"
+echo "================= The first part of the installation is finished." | tee -a "${LOG_FNAME}"
 echo "The next (final) step will install files unique to "
 echo "the shard server (as opposed to the directory server)."
-if confirm; then
-    echo "Continuing."
-else
-    echo "quitting now."
-    exit 0
-fi
 
 if grep '^postgres[:]' /etc/passwd; then
     # The postgres user exists. Create some directories.
@@ -1243,13 +1287,13 @@ else
 
     cd "${SHARD_DIR}/sql"
     sudo -u postgres  ./0002create_db.sh
-    echo "==== Finished 0002create_db.sh"
+    echo "==== Finished 0002create_db.sh" | tee -a ${LOG_FNAME}
 fi
 
 cd "${SHARD_DIR}/sql"
 db_existence=$(sudo -u postgres psql -c '\q'  ${DBNAME})
 if [ $? != 0 ]; then
-    echo "Error. Failed to create the shardsvrdb database."
+    echo "Error. Failed to create the shardsvrdb database." | tee -a ${LOG_FNAME}
     exit 834
 fi
 
@@ -1279,25 +1323,26 @@ if [ -z "${chk_shard}" ]; then
     echo "Check the line above. If you alread have the database password " \
         "in 0010setup.sql"
     if confirm "Do you want to create the shardsvrdb tables? (y/n): "; then
+				echo "Creating shardsvrdb tables..."  | tee -a ${LOG_FNAME}
         cd "${SHARD_DIR}/sql"
-        sudo -u postgres psql -c '\i 0010once.sql' "${DBNAME}"
-        sudo -u postgres psql -c '\i 0015shard_server.sql' "${DBNAME}"
-        sudo -u postgres psql -c '\i 0016shard_server_big.sql' "${DBNAME}"
-        sudo -u postgres psql -c '\i functions/scan_shard_delete.sql' "${DBNAME}"
-        sudo -u postgres psql -c '\i functions/shard_burn.sql' "${DBNAME}"
-        sudo -u postgres psql -c '\i functions/shard_delete.sql' "${DBNAME}"
-        sudo -u postgres psql -c '\i functions/shard_expire.sql' "${DBNAME}"
-        sudo -u postgres psql -c '\i functions/sysmon010.sql' "${DBNAME}"
-        sudo -u postgres psql -c '\i functions/shard_burn_big.sql' "${DBNAME}"
-        sudo -u postgres psql -c '\i functions/shard_delete_db_entries.sql' "${DBNAME}"
-        sudo -u postgres psql -c '\i functions/shard_expire_big.sql' "${DBNAME}"
-        sudo -u postgres psql -c '\i functions/shard_id_exists.sql' "${DBNAME}"
+        sql_it 0010once.sql "${DBNAME}"
+        sql_it 0015shard_server.sql "${DBNAME}"
+        sql_it 0016shard_server_big.sql "${DBNAME}"
+        sql_it functions/scan_shard_delete.sql "${DBNAME}"
+        sql_it functions/shard_burn.sql "${DBNAME}"
+        sql_it functions/shard_delete.sql "${DBNAME}"
+        sql_it functions/shard_expire.sql "${DBNAME}"
+        sql_it functions/sysmon010.sql "${DBNAME}"
+        sql_it functions/shard_burn_big.sql "${DBNAME}"
+        sql_it functions/shard_delete_db_entries.sql "${DBNAME}"
+        sql_it functions/shard_expire_big.sql "${DBNAME}"
+        sql_it functions/shard_id_exists.sql "${DBNAME}"
 
     #shred -u 0010once  #remove the temp file with pw
     fi
 else
     echo "I am not installing the shard server tables because I already " \
-        "found a shard table."
+        "found a shard table." | tee -a ${LOG_FNAME}
 fi
 ############################################################
 ############################################################

@@ -1710,7 +1710,7 @@ EOF
             echo "   sudo crontab -e"
             echo "to edit a crontab, then past the example text, and double check"
             echo "the python3 program name and the python script file name."
-            echo "*/5 * * * * /usr/local/bin/python3 /var/natmsg/monitor.py"
+            echo "*/5 * * * * /usr/bin/python3.4 /var/natmsg/monitor.py"
             echo "copy the line above with the mouse and prepare to "
             echo "paste it into crontab..."
             gshc_continue
@@ -1737,7 +1737,7 @@ EOF
         echo "You can manually run two crontab commands: one for root and one for the"
         echo "natmsg user ID."
         echo "For the root user ID, run crontab -e and enter this:"
-        echo "*/5 * * * * /usr/local/bin/python3 /var/natmsg/monitor.py"
+        echo "*/5 * * * * /usr/bin/python3.4 /var/natmsg/monitor.py"
         echo ""
         echo "Then run this command and enter the string below it:"
         echo "   sudo -u natmsg crontab -e"
