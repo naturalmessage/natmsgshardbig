@@ -155,7 +155,8 @@ repartition your disk and resize the operating system. You can run this on a
 live image, but I do it from may laptop writing to an SD card that holds the
 Raspbian image:
 
-```# Check which devices you have
+```
+# Check which devices you have
 sudo lsblk -a
 # modify the next line to point to your SD card
 sudo parted --align optimal /dev/sdXXXXX
@@ -273,8 +274,10 @@ Update the fingerprint for your Natural Message Keys.  You can
 ask Bob to give you that value.  To calculate that value yourself, 
 you can run something like this:
 
+```
 openssl dgst -sha384 \
     MyOfflinePUBSignKey.key |tr "[[:lower:]]" "[[:upper:]]"
+```
 
 Update the paths for the four ONLINE keys, starting with
 ONLINE_PUB_SIGN_KEY_FNAME and including the last one that
@@ -311,6 +314,7 @@ Save the config file and exit nano.
 
 Running the Natural Message Shard Server
 ----------------------------------------
+
 ```
 cd /var/natmsg/
 ls natural*.py
