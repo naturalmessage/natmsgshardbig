@@ -192,6 +192,7 @@ while [ "${good}" = 'n' ]; do
 	ping -c 2 -W 40 yahoo.com
 	if [ "$?" = "0" ]; then
 		good='y'
+        echo "The Internet seem to be functioning OK."
 	fi
 done
 # show info on the connection

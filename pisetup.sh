@@ -2,6 +2,55 @@
 #
 # Setup notes and script for RaspberryPi with Raspbian/Debian 8.
 # 
+# Tips for Novice Linux Users Who Want the Easiest Install Method
+# ---------------------------------------------------------------
+# The easiest way to run this (for Linux newbies) is to download an
+# image of Raspbian that already has this script (and a couple other scripts)
+# installed on it. If you have that image on your Raspberry Pi
+# SD card, then...
+#   1) Put the micro-SD card into your Raspberry Pi.
+#      Plug in a USB Keyboard into a USB port.
+#      Plug an Ethernet cable into your Pi and put the other end
+#      into a working DSL modem (or whatever modem that gives you access
+#      to the internet--avoid using wifi over the air).
+#      Plug in a HDMI cable into the side of the Pi and put the
+#      other end into and HDMI TV monitor or computer monitor
+#      (I have an HDMI to DVI cable and it works with my old
+#      computer monitor from 2008).
+#   2) Insert the SD card that already contains the special image
+#      of Raspbian that contains the Natural Message scripts.
+#      The card goes
+#      upside down, under the Pi on the end opposite from the USB
+#      ports.  The card slot is spring loaded, so when it is nearly
+#      inserted, you will feel a little spring tension, then it should
+#      stick into place.  To Remove the card, press again, feel the
+#      spring tension, and then the card should pop out. 
+#   3) Plug in the power supply for the Raspberry Pi... you should see
+#      a couple lights on the Pi light up.
+#   4) log in with user id 'pi' (do not enter the quotes) and password
+#      'raspberry' (do not enter the quotes).
+#   5) You should automatically be in the /home/pi directory without
+#      having to do anything to get there.  Now type this EXACTLY
+#      as shown (without the leading #).
+#        sudo ./pisetup.sh
+#   6) Notes during pisetup.sh...
+#      * When you get to the keyboard setup routine, the first screen
+#        should detect the type of keyboard you have, then on the next
+#        screen, use the arrow keys to scroll down to "Other" and press
+#        ENTER.
+#        On the next screen I use the arrow keys to select "English (US)"
+#        then on the next screen I scroll to the top to selenct the regular
+#        "English (US)" again, but you can select something that matches 
+#        your language and keyboard.
+#      * If you must use wifi for the initial setup, then say 'y' to
+#        the prompt to set up wifi, then look at the output to see
+#        the name of your wifi router--use the name that you would
+#        normally see when you connect to it from another device...
+#        It should be a name comprised of regualar letter and numbers
+#        to form readable name (as oppsed to hex codes).
+#
+# Tips for Experienced Linux Users Who Want to Install this Manually
+# ------------------------------------------------------------------
 # To put this on a new Raspberry PI that runs Raspbian 8, login to the
 # pi (the defulat user ID is pi and the default password is raspberry), 
 # then you can run one of two things:
@@ -15,12 +64,13 @@
 #    you could mount the drive and copy this script (and also setupNM-Deb8.sh)
 #    to the /home/pi directory (if you know how to mount ext4 drives manually).
 # 4) add a file (the name can not contain a ~ or a .) in /etc/sudoers.d/ with
+#    permissions set to 440
 #    with two lines like this (without the leading '#' and optionally include
 #    another, custom user ID instead of 'super')
 #       super ALL=(ALL:ALL) ALL
 #       natmsg ALL=(ALL:ALL) ALL
-# 5) add an entry for a root cron job in /var/spool/cron/crontabs/root 
-#    that contains:
+# 5) add an entry for a root cron job in /var/spool/cron/crontabs/root,
+#    set permissions to 600, and set the content to contain:
 #       */5 * * * * /usr/bin/python3.4 /var/natmsg/monitor.py
 # 6) modify /etc/ssh/sshd_config to set PermitRootLogin to say 'yes'.
 ###############################################################################
@@ -47,18 +97,72 @@
 # * mount the new SD image on your laptop/main computer:
 #   (In my case, my newly formatted SD card was in /dev/sdc, but
 #   your device name might be different, use the lsblk command
-#   to see what your device name is).
+#   to see what your device name is).  Example commands on Linux
+#   follow.  If you don't have Linux, you could buy a pre-formatted
+#   Raspbian card from Raspbian.org and then put a second SD card
+#   in an external SD card reader on your Raspberry Pi and use
+#   this to format the card that will have your special Natural Message
+#   programs....
+#     # first download Raspbian Lite from raspbian.org and unzip it:
+#     unzip 2016-02-09-raspbian-jessie-lite.img.zip
+#     lsblk -a # read this to find the device name of the SD card, 
+#              # my card is at /dev/sdc
+#     # 
+#     dd if=2016-02-09-raspbian-jessie-lite.img of=/dev/sdc bs=4M
+#     parted --align optimal /dev/sdc
+#       (parted) unit MiB
+#       (parted) print
+#       (parted) resizepart 2 14000
+#       (parted) print
+#       (parted) q
 #     lsblk -a
 #     sudo mkdir -p /media/SD
 #     sudo mount /dev/sdc2 /media/SD
-#     cp pisetup.sh /media/SD/home/pi
-#     cp setupNM-Deb8.sh /media/SD/home/pi
+#     sudo cp pisetup.sh /media/SD/home/pi
+#     sudo cp pi-wifi-setup.sh /media/SD/home/pi
+#     sudo cp setupNM-Deb8.sh /media/SD/home/pi
 #     cd /media/SD/home/pi
 #     chown 1000:1000 *
+#     chmod 755 *.sh
+#     # In the next example, I will optionally prepare for an
+#     # additional user ID called 'super' in addition to the
+#     # required user ID of 'natmsg'
+#     echo "super ALL=(ALL:ALL) ALL" > /media/SD/etc/sudoers.d/natmsg
+#     echo "natmsg ALL=(ALL:ALL) ALL" >> /media/SD/etc/sudoers.d/natmsg
+#     chmod 600 /media/SD/etc/sudoers.d/natmsg
+#     echo "*/5 * * * * /usr/bin/python3.4 /var/natmsg/monitor.py" > /media/SD/var/spool/cron/crontabs/root
+#     chmod 600 /media/SD/var/spool/cron/crontabs/root
 #     cd ~
 #     sync
-#     umount /media/SD
-#     eject /dev/sdc
+#     sudo umount /media/SD
+#     sudo eject /dev/sdc
+#    
+#     # now find a directory that has free space and try this
+#     df -h
+#     cd /media/super/junk # or CD to your directory
+#     dd if=/dev/sdc of=NatMsg-V001-2016-02-09-raspbian-jessie-lite.img bs=4M
+#     zip NatMsg-V001-2016-02-09-raspbian-jessie-lite.img.zip NatMsg-V001-2016-02-09-raspbian-jessie-lite.img
+# #######
+#     # The following are notes to check the disk image by mounting
+#     # it on a loop device
+#     sudo parted  NatMsg-V001-2016-02-09-raspbian-jessie-lite.img
+#     (parted) unit B
+#     (parted) print
+#     (parted) q
+#     # The output shows the starting byte number for each partition.
+#     # That information could be used to mount that partition later.
+#     # In my case, the second partition started at byte 67108864.
+#     #
+#     # See which loop devices are in use
+#     sudo losetup -l
+#     sudo losetup /dev/loop0 NatMsg-V001-2016-02-09-raspbian-jessie-lite.img -o 67108864
+#     # show some info about the device:
+#     file -s /dev/loop0 
+#     sudo mkdir -p /media/SD
+#     sudo mount /dev/loop0 /media/SD/
+#     # look at the disk image and check it.
+#     umount /dev/loop0
+#     losetup -d /dev/loop0
 ###############################################################################
 
 if [ ! "$EUID" = "0" ]; then
@@ -109,9 +213,6 @@ if (confirm "Do you want to update passwords now? (y/n): "); then
 
 	read -p "Enter the user ID of a non-root user to add: " MY_UID
 	useradd -m ${MY_UID}
-
-	echo "Now you have to give you new user ID root privileges"
-	vi /etc/sudoers
 
 	echo "########################################################################"
 	echo "root root root root root root root root root root root root root root root root" 

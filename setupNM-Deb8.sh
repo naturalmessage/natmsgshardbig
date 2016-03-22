@@ -22,6 +22,17 @@
 # Note: if you are installing this on a Rasberry Pi that runs the Raspbian
 # OS, you should first read and run the pisetup.sh script in this directory.
 ############################################################################
+echo "############################################################"
+echo "Starting $0"
+echo
+if [ ! "$EUID" = "0" ]; then
+    echo "Error.  You must run this script as root."
+    echo "Try rerunning like this:"
+    echo "   sudo $0"
+    exit 12
+fi
+
+################################################################################
 ping -c 4 yahoo.com
 if [ $? = 0 ]; then
     echo "It looks like you can reach the Internet."
@@ -91,7 +102,15 @@ install_it(){
 	fi
 }
 
-
+set_pw(){
+    local my_user_id=$1
+    while ! passwd $1; do
+        passwd $1
+        if [ ! $? = 0 ]; then
+            echo "Oops.  The password was not set, try again..."
+        fi
+    done
+}
 
 sql_it(){
 	local SQL_NM="$1"
@@ -301,6 +320,7 @@ if [    "${INSTALL_BASICS}" = "y" ]; then
 
 
     install_it vim 
+    install_it nano
     install_it lynx 
     install_it screen 
     install_it rsync 
@@ -346,13 +366,19 @@ natmsg_tst=$(cat /etc/passwd|grep '^natmsg[:]')
 if [ -z "${natmsg_tst}" ]; then
     # The natmsg user ID does not exist, create it and set the password.
     useradd --create-home     -s /bin/bash natmsg 
+
+    # give it root privileges
+    echo "super ALL=(ALL:ALL) ALL" > /etc/sudoers.d/natmsg
+    echo "natmsg ALL=(ALL:ALL) ALL" >> /etc/sudoers.d/natmsg
+    chmod 600 /etc/sudoers.d/natmsg
+
     echo " "
     echo " "
     echo "You will now be prompted to enter a password for the natmsg"
     echo "user ID.    Use a good password because hackers will know that"
     echo "you have a natmsg user ID and might try to crack the password."
     read -p '...' junk
-    passwd natmsg
+    set_pw natmsg
 fi
 
 if [ ! -d /home/natmsg ]; then
@@ -479,14 +505,6 @@ chown -R natmsg:natmsg /var/natmsg
 touch    /var/mail/natmsg
 chown natmsg:natmsg /var/mail/natmsg 
 
-if [ -z "${natmsg_tst}" ]; then
-    echo "You will need to add the natmsg user ID to the sudoers list."
-    echo "Run this command and replicate the 'root  ALL=(ALL:ALL) ALL' "
-    echo "line and change root to natmsg"
-    read -p "Press ENTER to continue or Ctl-c" junk
-fi
-
-
 ############################################################
 ########################################################################
 # Python 3 from source seems to be needed for Debian 7 because
@@ -557,12 +575,12 @@ install_it python3-openssl
 if [    "${INSTALL_PYSETUP}" = "y" ]; then
 
     echo "Installing setuptools (ez_setup) from source"
-    echo "Because Cent OS 7 does not have an RPM for it"
+    echo "(I originally installed from source because CentOS 7"
+    echo "did not have an RPM for it)."
     if [ ! -d /root/noarch ]; then
       mkdir -p /root/noarch
     fi
     cd /root/noarch
-    ## wget https://bootstrap.pypa.io/ez_setup.py
     curl -L   --max-time 900 --retry 5 --retry-delay 60   --url https://bootstrap.pypa.io/ez_setup.py -O
     ${PYTHON3_PGM} ez_setup.py
 fi
@@ -648,7 +666,7 @@ if [    "${INSTALL_PSQL}" = "y" ]; then
     
     echo  ""
     echo "When prompted, enter the password for the postgres user ID"
-    passwd postgres
+    set_pw postgres
     
     echo ""
     echo ""
@@ -664,9 +682,7 @@ if [    "${INSTALL_PSQL}" = "y" ]; then
     echo "(Note that on my other setup the 'main' dir is called 'data'.)"
     echo ""
     
-    read -p "Press ENTER to continue..." junk
-    echo ""
-    echo ""
+    ### read -p "Press ENTER to continue..." junk
     echo ""
     echo "If installed from apt-get, the command for db setup is:"
     echo "   whereis pg_ctl"
@@ -1142,22 +1158,25 @@ fi
 rslt=$(crontab -l|grep monitor.py)
     if [    -z "${rslt}" ]; then
     echo "============================================================"
-    echo "Manual crontab setup:"
-    echo "Create a cron job to run /var/natmsg/monitor.py every 5 min"
-    echo "under the root user ID.  Use this command:"
-    echo "   sudo crontab -e"
-    echo "to edit a crontab, then past the example text, and double check"
-    echo "the python3 program name and the python script file name."
-    echo "*/5 * * * * /usr/bin/python3.4 /var/natmsg/monitor.py"
-    echo "copy the line above with the mouse and prepare to paste it into crontab..."
-    read -p "Press any key to continue ..." junk
-    crontab -e
+    echo "Attempting to set a cron job that run under the root ID"
+    echo "and runs /var/natmsg/monitor.py every 5 minutes."
+    echo
+
+    echo "*/5 * * * * /usr/bin/python3.4 /var/natmsg/monitor.py" > /var/spool/cron/crontabs/root
+    chmod 600 /var/spool/cron/crontabs/root
 fi
 ############################################################
 
 ################################################################################
 ################################################################################
 cd /root/noarch
+if [ -f natmsgv.tar.gz ]; then
+    rm natmsgv.tar.gz
+fi
+if [ -f natmsgv.tar ]; then
+    rm natmsgv.tar
+fi
+
 ##wget https://github.com/naturalmessage/natmsgv/archive/master.tar.gz -O natmsgv.tar.gz
 ##curl -L --url https://github.com/naturalmessage/natmsgv/archive/master.tar.gz -O natmsgv.tar.gz -O
 ### FIX THE LINE ABOVE
@@ -1314,48 +1333,52 @@ if [ -z "${chk_shard}" ]; then
   ### # 
     # Get a password to initialize the database, save it in 0010once.sql
     ##read -s -p "Enter a new password for the database: " NEW_DB_PW
-    read -p "Enter a new password for the database: " NEW_DB_PW
-    cat "${SHARD_DIR}/sql/0010setup.sql"|sed \
-        -e "s/ENTER_YOUR_database_PASSWORD/${NEW_DB_PW}/" > \
-        "${SHARD_DIR}/sql/0010once.sql"
-    
-    cat "${SHARD_DIR}/sql/0010once.sql"|grep pass
-    echo "Check the line above. If you alread have the database password " \
-        "in 0010setup.sql"
-    if confirm "Do you want to create the shardsvrdb tables? (y/n): "; then
-				echo "Creating shardsvrdb tables..."  | tee -a ${LOG_FNAME}
-        cd "${SHARD_DIR}/sql"
-        sql_it 0010once.sql "${DBNAME}"
-        sql_it 0015shard_server.sql "${DBNAME}"
-        sql_it 0016shard_server_big.sql "${DBNAME}"
-        sql_it functions/scan_shard_delete.sql "${DBNAME}"
-        sql_it functions/shard_burn.sql "${DBNAME}"
-        sql_it functions/shard_delete.sql "${DBNAME}"
-        sql_it functions/shard_expire.sql "${DBNAME}"
-        sql_it functions/sysmon010.sql "${DBNAME}"
-        sql_it functions/shard_burn_big.sql "${DBNAME}"
-        sql_it functions/shard_delete_db_entries.sql "${DBNAME}"
-        sql_it functions/shard_expire_big.sql "${DBNAME}"
-        sql_it functions/shard_id_exists.sql "${DBNAME}"
+    good_pw='n'
+    while [ good_pw == 'n' ]; do
+        read -p "Enter a new password for the database: " NEW_DB_PW
+        cat "${SHARD_DIR}/sql/0010setup.sql"|sed \
+            -e "s/ENTER_YOUR_database_PASSWORD/${NEW_DB_PW}/" > \
+            "${SHARD_DIR}/sql/0010once.sql"
+        
+        cat "${SHARD_DIR}/sql/0010once.sql"|grep pass
+        echo "Check the line above. If you alread have the database password " \
+            "in 0010setup.sql"
+        if confirm "Do you want to use that password? (y/n): "; then
+            echo "OK, I will now try to create the database..." | tee -a ${LOG_FNAME}
+            good_pw='y'
+        fi
+    done
+
+    cd "${SHARD_DIR}/sql"
+    sql_it 0010once.sql "${DBNAME}"
+    sql_it 0015shard_server.sql "${DBNAME}"
+    sql_it 0016shard_server_big.sql "${DBNAME}"
+    sql_it functions/scan_shard_delete.sql "${DBNAME}"
+    sql_it functions/shard_burn.sql "${DBNAME}"
+    sql_it functions/shard_delete.sql "${DBNAME}"
+    sql_it functions/shard_expire.sql "${DBNAME}"
+    sql_it functions/sysmon010.sql "${DBNAME}"
+    sql_it functions/shard_burn_big.sql "${DBNAME}"
+    sql_it functions/shard_delete_db_entries.sql "${DBNAME}"
+    sql_it functions/shard_expire_big.sql "${DBNAME}"
+    sql_it functions/shard_id_exists.sql "${DBNAME}"
 
     #shred -u 0010once  #remove the temp file with pw
-    fi
 else
     echo "I am not installing the shard server tables because I already " \
         "found a shard table." | tee -a ${LOG_FNAME}
 fi
 ############################################################
 ############################################################
-if [ -z "${IPTABLES_SETUP}" ]; then
-    echo "====================== here are the old rules before flushing and re-initializing:"
+if [ "${IPTABLES_SETUP}" = 'y' ]; then
+    echo "====================== here are the old firewall rules before flushing and re-initializing:"
     iptables --list
     iptables --list-rules
 
     # clear 
     iptables --flush
 
-
-    # ## optionally insert a rule early in the chain to allow your ip
+    ### optionally insert a rule early in the chain to allow your ip
     ##iptables -I INPUT -s 123.123.123.0/24 -j ACCEPT
 
     # Allow established connections:
@@ -1368,7 +1391,7 @@ if [ -z "${IPTABLES_SETUP}" ]; then
     iptables -A INPUT -m state --state new -m tcp -p tcp --dport 80 -j ACCEPT
     iptables -A INPUT -m state --state new -m tcp -p tcp --dport 443 -j ACCEPT
 
-    # Erlang connector for testing 
+    # Erlang Connector for testing 
     iptables -A INPUT -m state --state new -m tcp -p tcp --dport 8443 -j ACCEPT
     # shard server ports:
     iptables -A INPUT -m state --state new -m tcp -p tcp --dport 4430:4440 -j ACCEPT
@@ -1381,11 +1404,19 @@ if [ -z "${IPTABLES_SETUP}" ]; then
     # to allowing somebody else to initialize a connection
     # to my port 123.
     #iptables -A INPUT -p udp --dport 123 -j ACCEPT
+    ###############################################################################
+    # The last iptables command is to APPEND a command to drop
+    # all other incomming:
+    # Default policy is to drop inbound action:
+    iptables --policy INPUT DROP
+    ###############################################################################
+    ## Make the iptables settings permanent only after you know that
+    ## they work and you can connect to your machine via ssh if you need to.
+    iptables-save > /etc/iptables/rules.v4
 
-    # SMTP server
-    # iptables -A INPUT -p tcp --dport 25 -j ACCEPT
-
-    # for multiple VPN servers
+    echo "====================== here are the NEW firewall rules:"
+    iptables --list
+    iptables --list-rules
 fi
 
 ########################################################################
