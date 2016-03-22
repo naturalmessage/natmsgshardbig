@@ -319,6 +319,6 @@ Running the Natural Message Shard Server
 cd /var/natmsg/
 ls natural*.py
 # find the newest shard server program (highest number)
-sudo python3 naturalmsg_shardsvr_00_00_24.py  conf=/var/natmsg/conf/shard05.conf
+sudo python3 naturalmsg_shardsvr_00_00_20.py  conf=/var/natmsg/conf/natmsg_shard_prod_00_00_20.conf
 ```
 
