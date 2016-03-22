@@ -43,7 +43,8 @@ Install Tips for Novice Linux Users Who Want the Easiest Install Method
 The easiest way to run this (for Linux newbies) is to download and install an
 image of Raspbian that already has this script (and a couple other scripts)
 installed on it:
-https://106.187.53.102/img/NatMsgPi-V001-2016-02-09-raspbian-jessie-lite.img.zip
+https://106.187.53.102/NatMsgPi-V001-2016-02-09-raspbian-jessie-lite.img.zip
+(388623229 bytes, SHA1 03368c1eb6804062cc4b667d3ded49a4b0e9038d)
 Remember that you have to unzip that file before installing it on your micro SD
 card.
 
