@@ -155,7 +155,7 @@ SOURCE_DIR=$(pwd)
 
 PYTHON3_PGM=/usr/bin/python3
 PGUSER_HOME='/var/lib/postgresql'  # on centOS, I use /home/postgres
-SHARD_DIR="${PGUSER_HOME}/shardsvr/"
+SHARD_DIR="${PGUSER_HOME}/shardsvr"
 PGSQL_DATA='/var/lib/postgresql/9.4/main' #debian
 PGSQL_BIN='/usr/lib/postgresql/9.4/bin/'
 PGSQL_CONF='/etc/postgresql/9.4/main/postgresql.conf'
@@ -1264,109 +1264,119 @@ chown -R postgres:postgres "${PGUSER_HOME}"
 # Start the database (if it is not running), then
 # Create the database and build the tables.
 
-cd "${SHARD_DIR}/sql"
-
-# start the server prefferably running in 'screen'
-# declare -i chk_pg
-chk_pg=$(ps -A|grep postgres|wc -l)
-echo "testing chk_pg: ${chk_pg}"
-if [ "${chk_pg}" != "0" ]; then
-    echo "postgreSQL is already running"
-else
-    echo "Starting the PostgreSQL database now"
-    ### Note: postgres on Debian ran upon install with this command 
-    ###(from ps -Af|less)
-    ## "${PGSQL_BIN}/postgres" -D "${PGSQL_DATA}" -c config_file="${PGSQL_CONF}"
-    cd "${PGUSER_HOME}"
-    sudo -u postgres "${PGSQL_BIN}/postgres" -D "${PGSQL_DATA}" &
-    if [ ! $? = 0 ]; then
-        echo "Error.  Could not start the postgreSQL database."
-        exit 87
-    fi
-fi
-
-echo "I will now check for the existence of the shard server database:"
-
-cd ${SHARD_DIR}
-db_existence=$(sudo -u postgres psql  -c '\q' ${DBNAME})
-if [ $? = 0 ]; then
-    echo "The shardsvrdb database exists"
-else
-    echo "I did not find the shardsvrdb.  I will create it now"
-
-
-    cd /root/noarch/natmsgshardbig-master
-    cp -vR sql "${SHARD_DIR}"
-    if [ ! -f "${SHARD_DIR}/sql/0002create_db.sh" ]; then
-        echo "Error.    I do not see the 0002create_db.sh file in the expected place"
-        echo "(${SHARD_DIR}/sql/0002create_db.sh)."
-        echo "This means that the Nat Msg database will not be set up properly."
-        read -p "Press ENTER to continue or CTL-c to quit..." junk
-    fi
+if [ -d "${SHARD_DIR}/sql" ]; then
 
     cd "${SHARD_DIR}/sql"
-    sudo -u postgres  ./0002create_db.sh
-    echo "==== Finished 0002create_db.sh" | tee -a ${LOG_FNAME}
-fi
 
-cd "${SHARD_DIR}/sql"
-db_existence=$(sudo -u postgres psql -c '\q'  ${DBNAME})
-if [ $? != 0 ]; then
-    echo "Error. Failed to create the shardsvrdb database." | tee -a ${LOG_FNAME}
-    exit 834
-fi
-
-# Check if a table exists:
-chk_shard=$(sudo -u postgres psql \
-    -c '\d shardsvr.big_shards' ${DBNAME} |grep big_shard_pkid|tail -n 1)
-
-# sudo -u postgres psql -c '\d shardsvr.big_shards' ${DBNAME} |grep big_shard_pkid|tail -n 1
-
-if [ -z "${chk_shard}" ]; then
-    clear
-  echo "I do not see a shard table, so I will install the shard tables."
-  ###     if [ -f "${SHARD_DIR}/sql/0002create_db.sql" ]; then
-  ###         cd "${SHARD_DIR}/sql"
-  ###         sudo -u postgres psql  -c "\i 0002create_tables.sql" "${DBNAME}"
-  ###     fi
-  ### 
-  ### # 
-    # Get a password to initialize the database, save it in 0010once.sql
-    ##read -s -p "Enter a new password for the database: " NEW_DB_PW
-    good_pw='n'
-    while [ good_pw == 'n' ]; do
-        read -p "Enter a new password for the database: " NEW_DB_PW
-        cat "${SHARD_DIR}/sql/0010setup.sql"|sed \
-            -e "s/ENTER_YOUR_database_PASSWORD/${NEW_DB_PW}/" > \
-            "${SHARD_DIR}/sql/0010once.sql"
-        
-        cat "${SHARD_DIR}/sql/0010once.sql"|grep pass
-        echo "Check the line above. If you alread have the database password " \
-            "in 0010setup.sql"
-        if confirm "Do you want to use that password? (y/n): "; then
-            echo "OK, I will now try to create the database..." | tee -a ${LOG_FNAME}
-            good_pw='y'
+    # start the server prefferably running in 'screen'
+    # declare -i chk_pg
+    chk_pg=$(ps -A|grep postgres|wc -l)
+    echo "testing chk_pg: ${chk_pg}"
+    if [ "${chk_pg}" != "0" ]; then
+        echo "postgreSQL is already running"
+    else
+        echo "Starting the PostgreSQL database now"
+        ### Note: postgres on Debian ran upon install with this command 
+        ###(from ps -Af|less)
+        ## "${PGSQL_BIN}/postgres" -D "${PGSQL_DATA}" -c config_file="${PGSQL_CONF}"
+        cd "${PGUSER_HOME}"
+        sudo -u postgres "${PGSQL_BIN}/postgres" -D "${PGSQL_DATA}" &
+        if [ ! $? = 0 ]; then
+            echo "Error.  Could not start the postgreSQL database."
+            exit 87
         fi
-    done
+    fi
+
+    echo "I will now check for the existence of the shard server database:"
+
+    cd ${SHARD_DIR}
+    db_existence=$(sudo -u postgres psql  -c '\q' ${DBNAME})
+    if [ $? = 0 ]; then
+        echo "The shardsvrdb database exists"
+    else
+        echo "I did not find the shardsvrdb.  I will create it now"
+
+
+        cd /root/noarch/natmsgshardbig-master
+        cp -vR sql "${SHARD_DIR}"
+        if [ ! -f "${SHARD_DIR}/sql/0002create_db.sh" ]; then
+            echo "Error.    I do not see the 0002create_db.sh file in the expected place"
+            echo "(${SHARD_DIR}/sql/0002create_db.sh)."
+            echo "This means that the Nat Msg database will not be set up properly."
+            read -p "Press ENTER to continue or CTL-c to quit..." junk
+        fi
+
+        cd "${SHARD_DIR}/sql"
+        sudo -u postgres  ./0002create_db.sh
+        echo "==== Finished 0002create_db.sh" | tee -a ${LOG_FNAME}
+    fi
 
     cd "${SHARD_DIR}/sql"
-    sql_it 0010once.sql "${DBNAME}"
-    sql_it 0015shard_server.sql "${DBNAME}"
-    sql_it 0016shard_server_big.sql "${DBNAME}"
-    sql_it functions/scan_shard_delete.sql "${DBNAME}"
-    sql_it functions/shard_burn.sql "${DBNAME}"
-    sql_it functions/shard_delete.sql "${DBNAME}"
-    sql_it functions/shard_expire.sql "${DBNAME}"
-    sql_it functions/sysmon010.sql "${DBNAME}"
-    sql_it functions/shard_burn_big.sql "${DBNAME}"
-    sql_it functions/shard_delete_db_entries.sql "${DBNAME}"
-    sql_it functions/shard_expire_big.sql "${DBNAME}"
-    sql_it functions/shard_id_exists.sql "${DBNAME}"
+    db_existence=$(sudo -u postgres psql -c '\q'  ${DBNAME})
+    if [ $? != 0 ]; then
+        echo "Error. Failed to create the shardsvrdb database." | tee -a ${LOG_FNAME}
+        exit 834
+    fi
 
-    #shred -u 0010once  #remove the temp file with pw
+    # Check if a table exists:
+    chk_shard=$(sudo -u postgres psql \
+        -c '\d shardsvr.big_shards' ${DBNAME} |grep big_shard_pkid|tail -n 1)
+
+    # sudo -u postgres psql -c '\d shardsvr.big_shards' ${DBNAME} |grep big_shard_pkid|tail -n 1
+
+    if [ -z "${chk_shard}" ]; then
+        clear
+      echo "I do not see a shard table, so I will install the shard tables."
+      ###     if [ -f "${SHARD_DIR}/sql/0002create_db.sql" ]; then
+      ###         cd "${SHARD_DIR}/sql"
+      ###         sudo -u postgres psql  -c "\i 0002create_tables.sql" "${DBNAME}"
+      ###     fi
+      ### 
+      ### # 
+        # Get a password to initialize the database, save it in 0010once.sql
+        ##read -s -p "Enter a new password for the database: " NEW_DB_PW
+        good_pw='n'
+        while [ good_pw == 'n' ]; do
+            read -p "Enter a new password for the database: " NEW_DB_PW
+            cat "${SHARD_DIR}/sql/0010setup.sql"|sed \
+                -e "s/ENTER_YOUR_database_PASSWORD/${NEW_DB_PW}/" > \
+                "${SHARD_DIR}/sql/0010once.sql"
+            
+            cat "${SHARD_DIR}/sql/0010once.sql"|grep pass
+            echo "Check the line above. If you alread have the database password " \
+                "in 0010setup.sql"
+            if confirm "Do you want to use that password? (y/n): "; then
+                echo "OK, I will now try to create the database..." | tee -a ${LOG_FNAME}
+                good_pw='y'
+            fi
+        done
+
+        cd "${SHARD_DIR}/sql"
+        sql_it 0010once.sql "${DBNAME}"
+        sql_it 0015shard_server.sql "${DBNAME}"
+        sql_it 0016shard_server_big.sql "${DBNAME}"
+        sql_it functions/scan_shard_delete.sql "${DBNAME}"
+        sql_it functions/shard_burn.sql "${DBNAME}"
+        sql_it functions/shard_delete.sql "${DBNAME}"
+        sql_it functions/shard_expire.sql "${DBNAME}"
+        sql_it functions/sysmon010.sql "${DBNAME}"
+        sql_it functions/shard_burn_big.sql "${DBNAME}"
+        sql_it functions/shard_delete_db_entries.sql "${DBNAME}"
+        sql_it functions/shard_expire_big.sql "${DBNAME}"
+        sql_it functions/shard_id_exists.sql "${DBNAME}"
+
+        #shred -u 0010once  #remove the temp file with pw
+    else
+        echo "I am not installing the shard server tables because I already " \
+            "found a shard table." | tee -a ${LOG_FNAME}
+    fi
 else
-    echo "I am not installing the shard server tables because I already " \
-        "found a shard table." | tee -a ${LOG_FNAME}
+    echo "=========== The shard directory was not found: ${SHARD_DIR}/sql."
+    echo "If you were trying to install the shard server, you have to choose"
+    echo "the option to install the NatMsg shard server before the install/configure"
+    echo "step will run properly.  Try running this script again with the option"
+    echo "to install the Nat Msg shard server."
+    read -p echo "press ENTER to continue..." junk
 fi
 ############################################################
 ############################################################

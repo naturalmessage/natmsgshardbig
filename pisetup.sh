@@ -1,5 +1,7 @@
 #!/bin/bash
 #
+# to do, create .screenrc
+#
 # Setup notes and script for RaspberryPi with Raspbian/Debian 8.
 # 
 # Tips for Novice Linux Users Who Want the Easiest Install Method
