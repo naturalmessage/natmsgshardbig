@@ -1,4 +1,19 @@
 #!/bin/bash
+# This is pisetup.sh .
+# This will do some basic setup for a minimal Raspberry Pi install,
+# and then call the script to set up Natural Message Shard Server.
+# You can rerun this if there is a problem or if you want to chose
+# different options.
+###############################################################################
+#
+# Random Notes:
+#  1) The initial user id for Raspbian 8 is 'pi' and the password is 'raspberry'.
+#  2) The default Raspbian keyboard is for the UK, so here are a few key
+#     if you have a U.S. keyboard.  (note that I change keyboard layout below).
+#               Key  | Produces
+#             slash    #
+#   right-alt tilde    | 
+#
 #
 # to do, create .screenrc
 #
@@ -81,57 +96,61 @@
 #    .screenrc, .vimrc, .bash_profile, .profile
 # 3) put this in my naturalmessage github.
 ###############################################################################
-# Misc notes:
 #
-# The initial user id for Raspbian 8 is pi and the password is raspberry.
-#
-# The default Raspbian keyboard is for the UK, so here are a few key
-# if you have a U.S. keyboard.  (note that I change keyboard layout below).
-#               Key  | Produces
-#             slash    #
-#   right-alt tilde    | 
+#       Misc notes on how I created the custom Raspbian image...
 #
 #
-# After I used dd to put the initial boot image on the SD card, 
+#
+# * From your regular home computer, use the dd command to put 
+#   the initial boot image on the SD card.
 # * I used the parted command (and then 'resizepart 2') to expand the size of
 #   the partition, then in this script, the file system is expanded to
 #   fill the partition.
 # * mount the new SD image on your laptop/main computer:
 #   (In my case, my newly formatted SD card was in /dev/sdc, but
 #   your device name might be different, use the lsblk command
-#   to see what your device name is).  Example commands on Linux
-#   follow.  If you don't have Linux, you could buy a pre-formatted
+#   to see what your device name is).  
+# * Example commands on Linux for the few bullet points above:
+#   If you don't have Linux, you could buy a pre-formatted
 #   Raspbian card from Raspbian.org and then put a second SD card
 #   in an external SD card reader on your Raspberry Pi and use
 #   this to format the card that will have your special Natural Message
 #   programs....
-#     # first download Raspbian Lite from raspbian.org and unzip it:
+#
+#     # From you regular home computer (usually not a Raspberry Pi),
+#     # download Raspbian Lite from raspbian.org and unzip it:
 #     unzip 2016-02-09-raspbian-jessie-lite.img.zip
-#     lsblk -a # read this to find the device name of the SD card, 
-#              # my card is at /dev/sdc
-#     # 
-#     dd if=2016-02-09-raspbian-jessie-lite.img of=/dev/sdc bs=4M
-#     parted --align optimal /dev/sdc
+#     lsblk -f # Read this to find the device name of the SD card, 
+#              # My card is at /dev/sdc
+#     # Copy the image to the SD card on your external card reader
+#     # (the card should be about 16GB or bigger): 
+#     sudo dd if=2016-02-09-raspbian-jessie-lite.img of=/dev/sdc bs=4M
+#     sudo parted --align optimal /dev/sdc
 #       (parted) unit MiB
 #       (parted) print
 #       (parted) resizepart 2 14000
 #       (parted) print
 #       (parted) q
-#     lsblk -a
+#     lsblk -f
+#     # Now I'm going to mount the Raspbian image that is on
+#     # my exterinal card reader:
 #     sudo mkdir -p /media/SD
 #     sudo mount /dev/sdc2 /media/SD
+#     # Now I'll copy some scripts to the Raspberry Pi card:
 #     sudo cp pisetup.sh /media/SD/home/pi
 #     sudo cp pi-wifi-setup.sh /media/SD/home/pi
 #     sudo cp setupNM-Deb8.sh /media/SD/home/pi
+#     sudo cp pi_static_ip.sh  /media/SD/home/pi
 #     cd /media/SD/home/pi
 #     chown 1000:1000 *
 #     chmod 755 *.sh
 #     # In the next example, I will optionally prepare for an
 #     # additional user ID called 'super' in addition to the
 #     # required user ID of 'natmsg'
-#     echo "super ALL=(ALL:ALL) ALL" > /media/SD/etc/sudoers.d/natmsg
+#     echo "super ALL=(ALL:ALL) ALL" > /media/SD/etc/sudoers.d/super
 #     echo "natmsg ALL=(ALL:ALL) ALL" >> /media/SD/etc/sudoers.d/natmsg
 #     chmod 600 /media/SD/etc/sudoers.d/natmsg
+#     chmod 600 /media/SD/etc/sudoers.d/super
 #     echo "*/5 * * * * /usr/bin/python3.4 /var/natmsg/monitor.py" > /media/SD/var/spool/cron/crontabs/root
 #     chmod 600 /media/SD/var/spool/cron/crontabs/root
 #     cd ~
@@ -139,12 +158,16 @@
 #     sudo umount /media/SD
 #     sudo eject /dev/sdc
 #    
+#     ################################################################33
+#     # The next part is only if you want to capture the new/modified 
+#     # image and use it to image other Raspberry Pis...
 #     # now find a directory that has free space and try this
 #     df -h
 #     cd /media/super/junk # or CD to your directory
 #     dd if=/dev/sdc of=NatMsg-V001-2016-02-09-raspbian-jessie-lite.img bs=4M
-#     zip NatMsg-V001-2016-02-09-raspbian-jessie-lite.img.zip NatMsg-V001-2016-02-09-raspbian-jessie-lite.img
-# #######
+#     zip NatMsg-V001-2016-02-09-raspbian-jessie-lite.img.zip \
+#        NatMsg-V001-2016-02-09-raspbian-jessie-lite.img
+#
 #     # The following are notes to check the disk image by mounting
 #     # it on a loop device
 #     sudo parted  NatMsg-V001-2016-02-09-raspbian-jessie-lite.img
@@ -231,13 +254,41 @@ fi
 echo "The default keyboard layout for Raspbian is in British format."
 echo "This causes problems for U.S. keyboards and other keyboards."
 if (confirm "Do you want to change the keyboard now? (y/n): "); then
-    dpkg-reconfigure keyboard-configuration
-    setupcon
+    echo "WARNING, THE OLD TRICK OF USING dpkg-reconfigure keyboard-configuration"
+    echo "to change the keyboard stopped working due to an old call"
+    echo "to update-rc, so try editing the /etc/default/keyboard"
+    echo "file manually and changing the XKBLAYOUT= value to us like:"
+    echo "    XKBLAYOT=\"us\""
+    echo "or use one of the two-letter abbreviations on this page:"
+    echo "https://en.wikipedia.org/wiki/ISO_3166-1#Current_codes"
 
+    ## The old method in 2015:
+    #dpkg-reconfigure keyboard-configuration
+    #setupcon
+
+    # save the old keyboard layout:
+    cp /etc/default/keyboard /root/keyboard_default$DSTAMP
+# Plow down the old file with new options,
+# possibly ruining the keyboard layout.
+cat > /etc/default/keyboard <<EOF
+# KEYBOARD CONFIGURATION FILE
+
+# Consult the keyboard(5) manual page.
+
+XKBMODEL="pc105"
+XKBLAYOUT="us"
+XKBVARIANT=""
+#XKBOPTIONS="lv3:ralt_alt"
+XKBOPTIONS=""
+
+BACKSPACE="guess"
+EOF
+    
     echo
     echo "Note that if you are running inside 'screen' that the changes will"
-    echo "note be effective until you quit 'scren'."
+    echo "not be effective until you quit 'screen'."
     echo "You should probably reboot so that the new keyboard layout is used."
+    sleep 4
 fi
 
 #############################################################
@@ -282,14 +333,45 @@ fi
 #############################################################
 ###         WIFI SETUP
 # my linksys wifi thing does not work by default????.
+clear
+echo "I will present two choices for Internet connectivity."
+echo "These are for setup utilities that work from the command line"
+echo "before you even have access to the Internet."
+echo "You might need this if you use the minmal Raspberry Pi install."
 echo
-echo "Note: the wifi setup here assumes that you will connect to "
-echo "exactly one wifi signal, but you could rerun this to change to "
-echo "a new connection."
-./pi-wifi-setup.sh
+echo "If you have a working Ethernet with DHCP, you can probably"
+echo "say 'no' to each of the next two questions."
+echo "You can also say 'yes' to both the wifi and static questions."
+echo "Note that hardware compatibility can be a real pain.  The best"
+echo "thing to do is plug your Raspberry Pi directly into the back"
+echo "of your Internet router (using an Ethernet cable) or use a wifi"
+echo "device that is known to work with Raspberry Pi."
+echo
+if confirm "Do you want to configure the wifi for your Raspberry Pi (y/n)?: "; then
+    echo
+    # "Note: the wifi setup here assumes that you will connect to "
+    # "exactly one wifi signal, but you could rerun this to change to "
+    # "a new connection."
+    ./pi-wifi-setup.sh
+fi
+if confirm "Do you want to configure a static IP for a wired connection on your Raspberry Pi (y/n)?: "; then
+    echo
+    echo "Note: the wifi setup here assumes that you will connect to "
+    echo "exactly one wifi signal, but you could rerun this to change to "
+    echo "a new connection."
+    ./pi-static-ip.sh
+fi
 
 ###############################################################################
 apt-get update && apt-get -y upgrade
+if [ $? != 0 ]; then
+    echo "ERROR.  The update or upgrade failed."
+    echo "Check your Internet connection and try again."
+    echo "You can rerun this script to try to configure"
+    echo "your Internet connection."
+    exit 98
+fi
+
 apt-get -y install screen
 
 # cryptsetup for encrypted disks
@@ -303,6 +385,13 @@ apt-get -y install screen
 #   apt-get install rpi-update
 #   rpi-update 0764e7d78d30658f9bfbf40f8023ab95f952bcad
 apt-get -y install cryptsetup
+if [ $? != 0 ]; then
+    echo "WARNING.  There was a problem installing cryptsetup."
+    echo "You might not need this program if you do not want to "
+    echo "create encrypted disks, but check the notes in this script"
+    echo "to see if there is still a problem with the rpi-update."
+    read -p "Pres ENTER to continue or Ctl-c to quit..." junk
+fi
 
 
 ###############################################################################
@@ -318,4 +407,6 @@ apt-key add - < archive-key-8-security.asc
 # Get the Nat Msg shard server setup and run it.
 curl  --max-time 900 --retry 5 --retry-delay 40   --url https://raw.githubusercontent.com/naturalmessage/natmsgshardbig/master/setupNM-Deb8.sh -O
 chmod 755 setupNM-Deb8.sh
+
+# Run the custom comands to set up Natural Message Shard Server
 ./setupNM-Deb8.sh

@@ -48,8 +48,37 @@ fi
 #   #Authorization option should be OPEN for both WPA1/WPA2 (in less commonly used are SHARED and LEAP)
 #   auth_alg=OPEN
 #   }
-
-
+###############################################################################
+# IF THERE IS NO SECURITY ON THE WIFI, YOU MIGHT BE ABLE TO CONNECT 
+# TO THE WIFI USING SOMETHING LIKE THIS (assuming that your device is called
+# wlan0):
+#
+#    sudo ip link set wlan0 up # allegedly this will bring up the device
+#    # sudo ifconfig wlan0 up # redundant command to bring up the device
+#    # The next command helps you to find the ESSID if your device name
+#    # starts with 'wlan'
+#    sudo iwlist scan|grep 'ESSID\|Address\|wlan'  
+#    sudo /sbin/iwconfig wlan0 essid 'Unfiltered Access - Over 18'
+#    sudo /sbin/iwconfig wlan0 key open
+#    sudo /sbin/dhclient wlan0 # get IP from DHCP
+#    sudo /sbin/iw wlan0 link # show connection info
+#    # You now have to set the /etc/resolv.conf file to point to DNS.
+#    # You have a couple options for doing this.
+#    # Option 1)  Try looking in this file (or other files in or near 
+#    # the same directory):
+#    cat   /var/lib/dhcp/dhclient.leases
+#    # You can tell from the IP addresses in there and the other information
+#    # which lease applies to the current connection.  You can then
+#    # put that information into /etc/resolv.conf.
+#    # Option 2) TRY LOOKING AT THE DNS AND 'SEARCH DOMAINS'
+#    # ON A WORKING COMPUTER THEN PUT THAT INFO INTO /etc/resolv.conf.
+#    #
+#    # My resolv.conf at the library looks like this:
+#       domain LVCCLD.INT
+#       search LVCCLD.INT
+#       nameserver 204.62.68.15
+#       nameserver 204.62.68.16
+###############################################################################
 confirm(){
   local tmp_FIN="N"
   local yn=''
